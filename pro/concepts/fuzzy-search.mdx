@@ -1,0 +1,405 @@
+---
+title: Fuzzy search
+---
+
+**Fuzzy Search** in Databunker Pro enables intelligent, approximate matching for user records, allowing you to find users even when search terms don't match exactly. This powerful feature is essential for applications that need to handle typos, partial matches, or variations in user data.
+
+## What Problems Does Fuzzy Search Solve?
+
+### 1. **User Experience Enhancement**
+
+- ✅ Handles typos and misspellings in search queries
+- ✅ Enables partial matching for incomplete user data
+- ✅ Provides intelligent suggestions for user lookup
+- ✅ Reduces failed searches due to exact-match requirements
+
+### 2. **Data Quality Challenges**
+
+- ✅ Works with inconsistent data entry formats
+- ✅ Handles variations in user-provided information
+- ✅ Accommodates different naming conventions
+- ✅ Supports legacy data with formatting inconsistencies
+
+### 3. **Administrative Efficiency**
+
+- ✅ Enables quick user discovery in large datasets
+- ✅ Reduces support tickets from failed user lookups
+- ✅ Improves admin interface usability
+- ✅ Supports bulk operations with approximate matching
+
+## How Fuzzy Search Works
+
+Databunker Pro's fuzzy search implementation uses advanced algorithms to find users based on similarity rather than exact matches. The system analyzes multiple user attributes and returns results ranked by relevance.
+
+### Supported Search Modes
+
+| Search Mode | Description               | Use Case                             |
+| ----------- | ------------------------- | ------------------------------------ |
+| `login`     | Searches user login names | Finding users by username variations |
+| `email`     | Searches email addresses  | Locating users with email typos      |
+| `phone`     | Searches phone numbers    | Finding users with phone variations  |
+| `custom`    | Searches by custom index  | Funding users with custom variations |
+
+## API Usage
+
+### Prerequisites
+
+Before performing fuzzy searches, you need to:
+
+1. **Create a Bulk List Unlock**: Required for security and audit purposes
+2. **Obtain proper permissions**: Ensure your token has search capabilities
+3. **Prepare search parameters**: Define search mode and criteria
+
+### Basic Fuzzy Search Request
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/UserSearch" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "login",
+    "identity": "user0",
+    "unlockuuid": "your-unlock-uuid"
+  }'
+```
+
+### JavaScript/TypeScript Example (Using Official SDK)
+
+```javascript
+// ES Modules
+import DatabunkerproAPI from "databunkerpro-js";
+
+// CommonJS
+// const DatabunkerproAPI = require('databunkerpro-js');
+
+// Initialize the client
+const client = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "your-token"
+);
+
+// Step 1: Create bulk list unlock
+const unlockResponse = await client.bulkListUnlock();
+const unlockUUID = unlockResponse.unlockuuid;
+
+// Step 2: Perform fuzzy search
+const searchResponse = await client.userSearch({
+  mode: "login",
+  identity: "user0",
+  unlockuuid: unlockUUID,
+});
+
+// Process results
+if (searchResponse.status === "ok") {
+  const users = searchResponse.rows;
+  console.log(`Found ${users.length} matching users`);
+
+  users.forEach((user) => {
+    const profile = user.profile;
+    console.log(`User: ${profile.login} - ${profile.email}`);
+  });
+}
+```
+
+### Python Example (Using Official SDK)
+
+```python
+from databunkerpro import DatabunkerproAPI
+
+# Initialize the client
+api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance",
+    x_bunker_token="YOUR_ACCESS_TOKEN",
+    x_bunker_tenant="your-tenant-name"  # Optional for multi-tenant setups
+)
+
+# Step 1: Create bulk list unlock
+unlock_response = api.bulk_list_unlock()
+unlock_uuid = unlock_response["unlockuuid"]
+
+# Step 2: Perform fuzzy search
+search_response = api.user_search(
+    mode="login",
+    identity="user0",
+    unlockuuid=unlock_uuid
+)
+
+if search_response["status"] == "ok":
+    users = search_response["rows"]
+    print(f"Found {len(users)} matching users")
+
+    for user in users:
+        profile = user["profile"]
+        print(f"User: {profile['login']} - {profile['email']}")
+```
+
+## Real-World Use Cases
+
+### 1. **Customer Support**
+
+When customers contact support with partial or misspelled information, fuzzy search helps quickly locate their accounts:
+
+### 2. **User Administration**
+
+Administrators can find users even with incomplete information:
+
+### 3. **Data Migration**
+
+During system migrations, fuzzy search helps match records with slight variations:
+
+## Security Considerations
+
+### Access Control
+
+Fuzzy search respects Databunker Pro's Conditional Role-Based Access Control (CRBAC):
+
+- **Policy Enforcement**: Search results are filtered based on user permissions
+- **Audit Logging**: All search operations are logged for compliance
+- **Data Minimization**: Only authorized fields are returned in results
+
+### Privacy Protection
+
+- **Encrypted Storage**: All user data remains encrypted during search operations
+- **Secure Transmission**: Search requests use HTTPS encryption
+- **Access Logging**: Complete audit trail of all search activities
+
+## Error Handling
+
+### Common Error Scenarios
+
+```javascript
+try {
+  const searchResponse = await api.makeRequest("UserSearch", {
+    mode: "login",
+    identity: "nonexistent",
+    unlockuuid: unlockUUID,
+  });
+
+  if (searchResponse.status === "error") {
+    console.log("Search failed:", searchResponse.message);
+  } else if (searchResponse.rows.length === 0) {
+    console.log("No matching users found");
+  }
+} catch (error) {
+  console.error("Search request failed:", error);
+}
+```
+
+## Official JavaScript/TypeScript SDK
+
+For JavaScript and TypeScript developers, we provide an official SDK that simplifies integration with Databunker Pro's fuzzy search capabilities.
+
+### Installation
+
+```bash
+npm install databunkerpro-js
+```
+
+### SDK Features
+
+The [Databunker Pro JavaScript client](https://github.com/securitybunker/databunkerpro-js) provides:
+
+- **TypeScript support** with full type definitions
+- **ES Modules and CommonJS** compatibility
+- **Comprehensive API coverage** for all Databunker Pro features
+- **Built-in error handling** and validation
+- **User Management** (create, read, update, delete)
+- **Token Management**
+- **Fuzzy Search capabilities**
+- **System Operations**
+
+### Advanced JavaScript/TypeScript Example
+
+```typescript
+import DatabunkerproAPI from "databunkerpro-js";
+
+class UserSearchService {
+  private client: DatabunkerproAPI;
+  private unlockUUID?: string;
+
+  constructor(baseUrl: string, token: string) {
+    this.client = new DatabunkerproAPI(baseUrl, token);
+  }
+
+  private async ensureUnlock(): Promise<string> {
+    if (!this.unlockUUID) {
+      const response = await this.client.bulkListUnlock();
+      this.unlockUUID = response.unlockuuid;
+    }
+    return this.unlockUUID;
+  }
+
+  async searchUsers(mode: string, identity: string) {
+    const unlockUUID = await this.ensureUnlock();
+
+    const response = await this.client.userSearch({
+      mode,
+      identity,
+      unlockuuid: unlockUUID,
+    });
+
+    if (response.status !== "ok") {
+      throw new Error(`Search failed: ${response.message || "Unknown error"}`);
+    }
+
+    return response.rows;
+  }
+
+  async findUserByEmail(email: string) {
+    return this.searchUsers("email", email);
+  }
+
+  async findUserByLogin(login: string) {
+    return this.searchUsers("login", login);
+  }
+
+  async findUserByPhone(phone: string) {
+    return this.searchUsers("phone", phone);
+  }
+}
+
+// Usage example
+const searchService = new UserSearchService(
+  "https://your-databunker-instance.com",
+  "your-token"
+);
+
+// Search for users with error handling
+try {
+  const users = await searchService.findUserByLogin("john");
+  console.log(`Found ${users.length} matching users`);
+
+  users.forEach((user) => {
+    const profile = user.profile;
+    console.log(`Found: ${profile.login} - ${profile.email}`);
+  });
+} catch (error) {
+  console.error("Search failed:", error.message);
+}
+```
+
+## Official Python SDK
+
+For Python developers, we provide an official SDK that simplifies integration with Databunker Pro's fuzzy search capabilities.
+
+### Installation
+
+```bash
+pip install databunkerpro
+```
+
+Or install directly from GitHub:
+
+```bash
+pip install git+https://github.com/securitybunker/databunkerpro-python.git
+```
+
+### SDK Features
+
+The [Databunker Pro Python client](https://github.com/securitybunker/databunkerpro-python) provides:
+
+- **Type hints and comprehensive documentation**
+- **Error handling and validation**
+- **User Management** (create, read, update, delete)
+- **Token Management**
+- **Fuzzy Search capabilities**
+- **System Statistics**
+
+### Advanced Python Example
+
+```python
+from databunkerpro import DatabunkerproAPI
+from typing import List, Dict, Optional
+
+class UserSearchService:
+    def __init__(self, base_url: str, token: str, tenant: Optional[str] = None):
+        self.api = DatabunkerproAPI(
+            base_url=base_url,
+            x_bunker_token=token,
+            x_bunker_tenant=tenant
+        )
+        self._unlock_uuid: Optional[str] = None
+
+    def _ensure_unlock(self) -> str:
+        """Ensure we have a valid unlock UUID"""
+        if not self._unlock_uuid:
+            response = self.api.bulk_list_unlock()
+            self._unlock_uuid = response["unlockuuid"]
+        return self._unlock_uuid
+
+    def search_users(self, mode: str, identity: str) -> List[Dict]:
+        """Search for users using fuzzy matching"""
+        unlock_uuid = self._ensure_unlock()
+
+        response = self.api.user_search(
+            mode=mode,
+            identity=identity,
+            unlockuuid=unlock_uuid
+        )
+
+        if response["status"] == "ok":
+            return response["rows"]
+        else:
+            raise Exception(f"Search failed: {response.get('message', 'Unknown error')}")
+
+    def find_user_by_email(self, email: str) -> List[Dict]:
+        """Find users by email with fuzzy matching"""
+        return self.search_users("email", email)
+
+    def find_user_by_login(self, login: str) -> List[Dict]:
+        """Find users by login with fuzzy matching"""
+        return self.search_users("login", login)
+
+# Usage example
+search_service = UserSearchService(
+    base_url="https://your-databunker-instance",
+    token="YOUR_ACCESS_TOKEN",
+    tenant="your-tenant-name"
+)
+
+# Search for users
+users = search_service.find_user_by_login("john")
+for user in users:
+    profile = user["profile"]
+    print(f"Found: {profile['login']} - {profile['email']}")
+```
+
+## Integration Examples
+
+The JavaScript/TypeScript examples above can be easily adapted for any frontend framework (React, Vue, Angular) or backend environment (Node.js, Deno, Bun). The core API integration pattern remains the same across all environments.
+
+## Conclusion
+
+Databunker Pro's Fuzzy Search API provides a powerful, secure, and efficient way to find users in large datasets. By combining intelligent matching algorithms with robust security controls, it enables applications to deliver excellent user experiences while maintaining data privacy and compliance requirements.
+
+The fuzzy search capability is particularly valuable for:
+
+- Customer support systems
+- User administration interfaces
+- Data migration projects
+- Applications with large user bases
+
+### Getting Started
+
+We provide official SDKs for both JavaScript/TypeScript and Python developers:
+
+**For JavaScript/TypeScript developers:**
+
+- [Databunker Pro JavaScript SDK](https://github.com/securitybunker/databunkerpro-js) - `npm install databunkerpro-js`
+- TypeScript support with full type definitions
+- ES Modules and CommonJS compatibility
+- Comprehensive API coverage
+
+**For Python developers:**
+
+- [Databunker Pro Python SDK](https://github.com/securitybunker/databunkerpro-python) - `pip install databunkerpro`
+- Type hints and comprehensive documentation
+- Built-in error handling and validation
+
+Both SDKs provide:
+
+- Simplified API integration
+- Built-in error handling and validation
+- Support for all Databunker Pro features including fuzzy search
+
+With proper implementation and security considerations, fuzzy search can significantly improve your application's usability and user satisfaction.

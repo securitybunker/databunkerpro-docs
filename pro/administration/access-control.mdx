@@ -1,0 +1,92 @@
+---
+title: Conditional Role-Based Access Control (CRBAC)
+sidebarTitle: Access control
+---
+
+**Conditional Role-Based Access Control (CRBAC)** is an advanced access control system that extends traditional Role-Based Access Control (RBAC) by introducing dynamic conditions that determine access rights.
+
+CRBAC is particularly useful for businesses that need to comply with various privacy laws, such as:
+
+1. **DPDPA** (India's Digital Personal Data Protection Act)
+
+1. **FERPA** (Family Educational Rights and Privacy Act in the USA), which governs student education records
+
+1. **GDPR** (General Data Protection Regulation in the EU)
+
+With Databunker Pro, customers can easily implement solutions that align with these regulations, ensuring secure and compliant PII management.
+
+## Key Features of CRBAC
+
+- **Hierarchical Access Control:** Supports parent-child relationships in data access, enabling fine-grained permissions.
+- **Context-Aware Policies:** Defines access based on specific attributes like user roles, organizational structures, and compliance requirements.
+- **Dynamic Consent Enforcement:** Incorporates consent management for accessing PII.
+- **Group-Based Roles:** Databunker supports groups of users, where each member within a group can have distinct roles. For instance, in an educational group, roles like **Teacher** and **Student** can be assigned, or in a family group, roles such as **Parent** and **Child**.
+- **Similar to AWS IAM Policies:** Uses a declarative approach to grant or deny access based on conditions.
+
+## Policy Structure
+
+CRBAC policies resemble AWS IAM policies, defining **who** (principale) can perform **what** (actions) on **which** (resources) under **which conditions**.
+
+### Example Policy: Parent-Child Relationship Enforcement
+
+In Databunker Pro, you can create a custom group for family members. Within this group, parents will have read and write access to their child's information.
+
+You can use the following policy to grant parents access to their child's PII and consent information.
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "Role": "parent" },
+  "Action": ["READ", "WRITE", "LIST"],
+  "Resource": [
+    "${target_group_members:role/child}.profile",
+    "${target_group_members:role/child}.consent"
+  ],
+  "Condition": {
+    "StringEquals": {
+      "${principal_group_id}": "${target_group_id}"
+    }
+  }
+}
+```
+
+### Example Policy: Teacher-Parent Access
+
+This policy will grant to a teacher entity access to the student's parent information.
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "Role": "teacher" },
+  "Action": ["READ", "LIST"],
+  "Resource": [
+    "${target_group_members:role/parent}.profile.name",
+    "${target_group_members:role/parent}.profile.phone"
+  ],
+  "Condition": {
+    "ListIntersect": {
+      "${principal_group_members:role/student}": "${target_group_members:role/child}"
+    }
+  }
+}
+```
+
+## Why Choose CRBAC?
+
+1. **Compliance-Ready:** CRBAC ensures organizations meet legal and regulatory requirements, including FERPA and DPDPA.
+1. **Dynamic Access Control:** Unlike static RBAC, CRBAC adapts access rights based on real-time conditions.
+1. **Fine-Grained Permissions:** Allows precise control over PII data access, reducing the risk of unauthorized exposure.
+
+## Implementing CRBAC with Databunker Pro
+
+Databunker Pro simplifies CRBAC implementation by providing:
+
+1. Built-in support for conditional access policies
+1. Secure PII storage with compliance enforcement
+1. A developer-friendly API for managing role-based conditions
+
+By leveraging **Databunker Pro**, organizations can seamlessly enforce FERPA-compliant data access policies while maintaining flexibility for other regulatory frameworks.
+
+## Conclusion
+
+Conditional Role-Based Access Control (CRBAC) is essential for organizations handling sensitive PII under strict compliance regulations. With Databunker Pro, businesses can implement secure, scalable, and regulation-compliant access control mechanisms tailored to their needs.

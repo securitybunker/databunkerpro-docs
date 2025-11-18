@@ -1,0 +1,115 @@
+---
+title: Frequently asked questions
+sidebarTitle: FAQ
+---
+
+### How does Databunker Pro manage sensitive data tokenization?
+
+- Tokenizes entire user records (e.g., PII, PHI, KYC, PCI data) using UUID tokens or format-preserving tokens for specific data records (e.g., credit cards).
+- Encrypts data with AES-256 and stores it in a secure vault.
+- Provides access via RESTful APIs with role-based access controls (RBAC).
+- Supports multi-tenancy for secure management of multiple clients.
+
+### How is tokenization handled for multi-cloud or hybrid environments?
+
+- Supports multi-cloud and hybrid deployments via Docker Compose, Helm charts, or a cloud-hosted version.
+- Uses a stateless architecture for consistency across environments with a centralized secure vault for token mapping.
+- Enables multi-tenancy for secure data separation in shared cloud or hybrid setups.
+- Offers APIs for seamless integration with cloud-native or on-premises systems.
+
+### Does Databunker Pro implement tokenization for PII, card data, or account information? What approach is used?
+
+- Supports PII, card data (PCI), and account information (KYC).
+- Tokenizes entire records with UUIDs or uses format-preserving tokenization for specific records (e.g., credit card numbers).
+- Maintains data usability while ensuring security.
+
+### Is there a secure vault for storing token-to-data mappings, or is a deterministic, format-preserving method used without a vault?
+
+- Uses a secure vault to store AES-256-encrypted token-to-data mappings.
+- Offers format-preserving tokenization for specific records (for example for credit cards).
+- Ensures secure storage and retrieval with isolated vaults for different clients via multi-tenancy.
+
+### Are encryption, secure APIs, and access controls in place during tokenization workflows?
+
+- Encrypts data with AES-256 encryption.
+- Uses secure RESTful APIs with RBAC to handle tokenization.
+- Supports mutual TLS and certificate pinning for legitimate API access.
+- Requires time-based tokens for special handling of bulk requests.
+- Defines retrievable fields with a masking policy, masking others.
+
+### What are the authentication, encryption, and access control mechanisms for the token vault?
+
+- **Authentication**: Uses temporary UUID-based access tokens (more secure than JWT, as user identity like email/ID isn’t encoded). Supports passwordless options (e.g., one-time codes via email/SMS) for the optional user portal.
+- **Encryption**: Employs AES-256 for data and vault storage with secure indexing for searches.
+- **Access Controls**: Restricts vault access with RBAC and a masking policy defining retrievable fields (others masked). Tracks operations with audit trails. Ensures secure data isolation for different clients via multi-tenancy.
+
+### Does the tokenization process align with regulations like RBI, PCI DSS, GDPR, etc.?
+
+- Aligns with RBI, DPDPA, PCI DSS, GDPR, HIPAA, ISO 27001, and SOC2 standards.
+- Supports data minimization, user consent management, audit trails, and a User Privacy Portal for data subject rights.
+- Meets RBI’s data localization and GDPR’s privacy requirements.
+- Provides multi-tenancy for compliance in multi-client environments.
+
+### What is the de-tokenization policy? Is it role-based, audited, and strictly controlled?
+
+- Role-based de-tokenization requiring RBAC permissions.
+- Defines retrievable fields with a masking policy, masking others.
+- Audits all operations with strict controls for compliance.
+- Ensures tenant-specific de-tokenization via multi-tenancy.
+
+### What audit and monitoring capabilities are provided for tokenization activities?
+
+- Provides comprehensive audit trails, logging all tokenization and de-tokenization activities (user, timestamp, data accessed, data before and after change).
+- Currently offers no special monitoring capabilities beyond audit logs.
+- Segregates audit logs per client via multi-tenancy.
+
+### How is high availability and disaster recovery ensured for the tokenization engine?
+
+- Ensures high availability as a stateless service through containerized deployments (Docker, Helm) with load balancing.
+- Supports disaster recovery via database backups (PostgreSQL/MySQL) and replication.
+
+### Is the tokenization system scalable to support large transaction volumes (e.g., millions of transactions per day)? What are the performance benchmarks?
+
+- Scales to handle millions of transactions daily, built in Go.
+- Uses time-based tokens for secure handling of bulk requests.
+- Ensures low latency and high throughput with a stateless, multi-tenant architecture.
+- Supports database partitioning for format-preserving records to enhance scalability and performance.
+- Specific benchmark results can be generated based on the number of PII and credit card records.
+
+### How is token uniqueness ensured? Do you use randomization, hashing with salt, or cryptographic mapping?
+
+- Ensures token uniqueness by checking for duplicate records in the database and regenerating UUID tokens if duplicates are found.
+- Uses cryptographic mapping for format-preserving tokens with hash-based indexing and salts for deduplication.
+- Maintains unique tokens per tenant via multi-tenancy.
+
+### What cryptographic algorithms are used in token generation? Are they NIST-compliant?
+
+- Uses AES-256 for encryption, SHA-256 for secure indexing, and cryptographic UUIDs or format-preserving methods for token generation.
+- Aligns with NIST standards for encryption and key management.
+- Supports secure multi-tenant environments.
+
+### How are keys managed in the tokenization process? Are they stored in an HSM? What is the key rotation and lifecycle management policy?
+
+- Manages keys securely with a **master key** (never exposed) encrypting sensitive data in the vault using AES-256.
+- Protects the master key with a **wrapping key**, storable as a Kubernetes secret or retrievable from AWS Key Vault, HashiCorp Vault, or HSMs (requires custom development).
+- Supports **Shamir’s Secret Sharing** for generating wrapping keys, requiring 3 out of 5 key shares to reconstruct.
+- Configures key rotation following best practices for lifecycle management.
+
+### What mechanisms prevent token mapping leakage or reverse engineering of the token? Is there protection against brute-force or pattern analysis?
+
+- Prevents leakage and reverse engineering by using tokens (UUID-based or format-preserving) as pointers to AES-256-encrypted data in a secure vault.
+- Ensures tokens contain no inherent data, making reverse engineering infeasible without vault access.
+- Protects against brute-force or pattern analysis with RBAC, audit logs, and optional mutual TLS.
+- Prevents cross-tenant leakage via multi-tenancy.
+
+### How does Databunker Pro handle tokenization for structured and unstructured data? Is it applicable to database fields, documents, or images (e.g., OCR data)?
+
+- Tokenizes structured data (e.g., database fields like PII, or credit cards in PCI).
+- For unstructured data (e.g., documents, OCR-extracted data), recommends generating a random password, saving it in the user profile, and using it to encrypt the original file.
+
+### What happens if underlying data is updated after a token is generated and sent to the cloud? Is a new token generated, or is the old token updated?
+
+- Maintains the existing token’s validity, mapping to the updated data in the vault.
+- Generates no new token unless a new record is created (checked via deduplication).
+- Audits and encrypts updates, ensuring tenant-specific updates via multi-tenancy.
+- Databunker Pro team plans to release record versioning in a future version.

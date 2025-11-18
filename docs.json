@@ -22,7 +22,8 @@
                 "pages": [
                   "pro/get-started/overview",
                   "pro/get-started/pii-vault",
-                  "pro/get-started/architecture"
+                  "pro/get-started/architecture",
+                  "pro/get-started/faq"
                 ]
               },
               {
@@ -33,6 +34,30 @@
                   "pro/installation/docker-compose",
                   "pro/installation/generate-admin-credentials"
                 ]
+              },
+              {
+                "group": "Administration",
+                "icon": "cog",
+                "pages": [
+                  "pro/administration/overview",
+                  "pro/administration/master-key",
+                  "pro/administration/key-rotation",
+                  "pro/administration/shamir-keys",
+                  "pro/administration/multi-tenancy",
+                  "pro/administration/access-control"
+                ]
+              },
+              {
+                "group": "Concepts",
+                "icon": "brain",
+                "pages": [
+                  "pro/concepts/tokenization",
+                  "pro/concepts/fuzzy-search"
+                ]
+              },
+              {
+                "group": "Developer tools",
+                "pages": ["pro/developer-tools/overview"]
               }
             ]
           },

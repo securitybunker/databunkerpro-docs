@@ -1,0 +1,75 @@
+---
+title: Overview
+---
+
+Information security's primary focus is the balanced protection of **confidentiality**, **integrity**, and **availability** of data. This document reviews **Databunker Pro's** security features based on these core principles.
+
+**Databunker Pro** is built following privacy-by-design principles, which are integral to **GDPR**, **CPRA**, and **SOC2** privacy standards. **Databunker Pro** allows you to build **privacy by design** compliant solutions, and to follow data minimization requirements. When using **Databunker Pro**, every API request generates an audit trail. **Databunker Pro** can be used as a **consent management system** and as a **repository for processing operations**. It serves as an external storage according to pseudonymization definition and complies with Schrems II cross-border personal data transfer implementation.
+
+**Databunker Pro** also serves as a full-featured Data Protection Officer (DPO) portal. This version includes built-in connectors for popular cloud SaaS and Databases vendors: HubSpot, MailChimp, Salesforce, MySQL, PostgreSQL, Oracle, SQL Server, and many more. Personal data reports can now be generated with a single click.
+
+## How we address confidentiality
+
+### Encryption in transit and encryption at rest
+
+Databunker Pro enforces full encryption in transit and at rest by default. All network requests are secured using SSL encryption protocols.
+
+### Record encryption
+
+Customer personal information records are encrypted using **AES-256** keys or securely hashed in the product internal database.
+
+### Encryption of audit events
+
+Personally Identifiable Information (PII) in audit events is fully encrypted.
+
+### Secure hash-based search index
+
+Databunker Pro extracts emails, phone numbers, and login names from user records to build a hashed-based search index. This method allows secure lookups of original user records.
+
+### Backend database connectivity
+
+By default, **Databunker Pro** connects with PostgreSQL through a **secure SSL channel**.
+
+### Secure session storage
+
+Session data, including PII such as email addresses, IP addresses, and browser details, is securely stored in Databunker’s encrypted store via a dedicated API.
+
+### Secure bulk data export/dump
+
+We have introduced a specialized secure API to control and limit bulk data exports. Learn more <a href="/databunker-pro-docs/select-security/">here</a>.
+
+### Wrapping keys and Shamir key shares
+
+Databunker Pro uses a **Master key** to encrypt all records. The Master Key is never exposed. In Databunker Pro, the master key is further secured using a **Wrapping key**. The wrapping key can be rotated via API, and its backup is divided into parts using the Shamir key sharing algorithm for recovery if lost or compromised.
+
+### Optional user scheme validation
+
+Databunker Pro supports user schema validation to enforce mandatory fields in user records. It returns error messages for objects missing required fields.
+
+## How we address integrity
+
+### Record update
+
+Databunker employs encrypted JSON objects for storing user profiles. During updates, Databunker ensures the presence of the original record in the database by verifying its checksum before executing SQL UPDATE queries.
+
+### Multi-tenancy
+
+Databunker Pro implements <a href="/databunker-pro-docs/multi-tenancy/">multi-tenancy</a> using PostgreSQL’s row-level security mechanism. Queries executed by specific tenants are restricted to their own records.
+
+### Token-based API Access
+
+All API requests require a user token and tenant name. Databunker identifies user roles, verifies permissions, and blocks unauthorized requests within the tenant’s scope.
+
+## How we address availability
+
+### Containers
+
+Databunker Pro is distributed as Docker container, which can be easily deployed in cloud environments. Example scripts for running these containers using Docker Compose and Kubernetes are provided.
+
+### Stateless application server
+
+Databunker Pro is a stateless application server, enabling multiple instances to run concurrently. The primary bottleneck is the backend database. To address this, Databunker Pro integrates with AWS Aurora PostgreSQL Auto-Scaling databases.
+
+### Scalability in Kubernetes
+
+Databunker Pro can be seamlessly scaled in Kubernetes using horizontal scaling. This ensures high availability and performance under increasing workloads. Kubernetes facilitates effortless scaling by dynamically adjusting the number of running instances based on resource utilization, ensuring that Databunker can meet growing demands efficiently.

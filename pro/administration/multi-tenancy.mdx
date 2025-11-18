@@ -1,0 +1,120 @@
+---
+title: Multi-tenancy
+---
+
+Databunker Pro supports multi-tenancy, allowing you to manage multiple tenants within a single instance. This document outlines the API endpoints for creating, managing, and interacting with tenants.
+
+## Create Tenant
+
+Creates a new tenant in the Databunker Pro system.
+
+```bash
+curl -H 'X-Bunker-Token: ROOT-ACCESS-TOKEN' -X POST /v2/TenantCreate \
+     --data '{"tenantorg":"testorg","tenantname":"testname"}'
+```
+
+### Request Body
+
+| Field | Type   | Description                                              |
+| ----- | ------ | -------------------------------------------------------- |
+| name  | string | The name of the tenant. Must match the format: [a-z0-9]+ |
+| org   | string | The organization slug associated with the tenant         |
+
+### Response
+
+| Field  | Type   | Description                           |
+| ------ | ------ | ------------------------------------- |
+| status | string | Operation status ("ok" if successful) |
+| xtoken | string | Tenant access token in UUID format    |
+
+### Example Response
+
+```json
+{
+  "status": "ok",
+  "xtoken": "TENANT-ACCESS-TOKEN"
+}
+```
+
+### Notes
+
+- The `TENANT-ACCESS-TOKEN` is a special token to authenticate all tenant related commands. For example create user records.
+
+## Create a Tenant User Account
+
+You have two methods to specify the tenant name: you can either use the `X-Bunker-Tenant` HTTP header or include the tenant name in the hostname. If the `X-Bunker-Tenant` header is missing, Databunker Pro will attempt to retrieve the tenant name from the subdomain in the hostname. If neither option is available, a **default** tenant is used.
+
+Example commands:
+
+```bash
+curl -H 'X-Bunker-Token: XXXXXXX' \
+     -H 'X-Bunker-Tenant: TENANT-NAME' \
+     -H 'Content-Type: application/json' \
+     -X POST 'http://localhost:3000/v2/UserCreate' \
+     --data '{"profile":{"firstname":"John","lastname":"Doe","email":"user@email.com","login":"john"}}'
+```
+
+```bash
+curl -H 'X-Bunker-Token: XXXXXXX' \
+     -X POST https://TENANT-NAME.databunker-domain.com/v2/UserCreate \
+     --data '{"profile":{"firstname":"John","lastname":"Doe","email":"user@email.com","login":"john"}}'
+```
+
+### Notes
+
+- Replace `TENANT-NAME` in the URL with the actual name of the tenant.
+- The request body and response format for this endpoint are not provided in the given information. Typically, they would include user details such as name, email, etc., and return a user ID or status.
+
+## Rename Tenant
+
+Renames an existing tenant.
+
+```bash
+curl -H 'X-Bunker-Token: TENANT-ACCESS-TOKEN' \
+     -X POST https://old-tenant.databunker-domain.com/v2/TenantUpdate \
+     --data '{"tenantname":"new-name"}'
+```
+
+### Request Body
+
+| Field | Type   | Description                                                   |
+| ----- | ------ | ------------------------------------------------------------- |
+| name  | string | The new name for the tenant. Must match the format: [a-z0-9]+ |
+
+### Example Request
+
+```json
+{
+  "name": "new-name"
+}
+```
+
+### Response
+
+| Field  | Type   | Description                           |
+| ------ | ------ | ------------------------------------- |
+| status | string | Operation status ("ok" if successful) |
+
+### Example Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Other commands:
+
+For a full list of API requests, check out the <a href="https://documenter.getpostman.com/view/11310294/Szmcbz32">API document</a>.
+
+## General Notes
+
+1. **Tenant Name Format**: Tenant names must follow the format `[a-z0-9]+`. This means they can only contain lowercase letters and numbers.
+
+2. **Tenant-Specific URLs**: After creating a tenant, you'll interact with tenant-specific endpoints using URLs in the format `https://tenant-name.databunker-domain.com/...`.
+
+3. **Authentication**: Most endpoints will require the `TENANT-ACCESS-TOKEN` for authentication. Include this token in the `X-Bunker-Token` header or as specified in the Databunker Pro documentation.
+
+4. **SSL/TLS**: Always use HTTPS for secure communication with the API endpoints.
+
+For more detailed information on request/response formats, additional endpoints, or error handling, please refer to the complete Databunker Pro API documentation.
