@@ -78,7 +78,16 @@
             "groups": [
               {
                 "group": "Get started",
-                "pages": ["oss/overview"]
+                "pages": [
+                  "oss/get-started/overview",
+                  "oss/get-started/quickstart",
+                  "oss/get-started/architecture",
+                  "oss/get-started/examples"
+                ]
+              },
+              {
+                "group": "Installation",
+                "pages": ["oss/installation/overview"]
               }
             ]
           },
@@ -88,20 +97,6 @@
               "source": "oss/api/openapi.yml",
               "directory": "oss/api"
             }
-          }
-        ]
-      },
-      {
-        "product": "Databunker Zero-Trust",
-        "tabs": [
-          {
-            "tab": "Guides",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": ["zero-trust/overview"]
-              }
-            ]
           }
         ]
       }
