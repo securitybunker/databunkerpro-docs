@@ -1,0 +1,98 @@
+---
+title: Architecture
+description: In today’s digital landscape, protecting sensitive customer data isn’t just about compliance—it’s about building trust. Databunker Pro offers a next-generation secure vault for personal data (PII/PHI/KYC), combining robust encryption, tokenization, and privacy management in an enterprise-ready platform.
+---
+
+## Core architecture overview
+
+**Backend storage**
+
+- **PostgreSQL**: Reliable, secure backend for encrypted data storage, with row-level security for true multi-tenant isolation.
+- **Redis**: Used for encrypted storage of session information for faster, secure access.
+
+**Encryption and key management**
+
+- **Two-layer encryption**: Master encryption key secured by a separate wrapping key.
+- **Wrapping key rotation**: Rotate without re-encrypting all stored data.
+- **Shamir’s Secret Sharing**: Backup the wrapping key securely across multiple trusted parties.
+
+**Privacy management**
+
+- **DPO portal** for oversight and reporting.
+- **Consent management**, **audit trails**, and **data minimization** features built-in.
+- **One-click personal data reports** and full processing activity logs for compliance.
+
+**Scalability and deployment**
+
+- **Stateless architecture** for easy horizontal scaling on Kubernetes.
+- **High availability** with multi-instance deployment and database failover readiness.
+- **Container-based deployment**: Docker, Docker Compose, and Kubernetes templates included.
+
+**Integration**
+
+- Available client libraries for **PHP**, **JavaScript/TypeScript**, **Java**, and **Python** to simplify integration.
+- Prebuilt connectors for Salesforce, HubSpot, MailChimp, MySQL, PostgreSQL, Oracle, and SQL Server.
+
+![Architecture diagram](/pro/get-started/databunker-diagram.png)
+
+## Security architecture deep dive
+
+**Data protection**
+
+- **SSL/TLS encryption** for all API and database communication.
+- **AES-256 encryption** at rest for all personal data.
+- **Secure hash-based indexing** for searchable fields like email, phone number, and login names.
+- **Zero clear-text storage** of sensitive information.
+
+**Access control**
+
+- Fine-grained, token-based API authentication.
+- Multi-tenant separation using PostgreSQL Row-Level Security (RLS).
+- Default prevention of bulk data extraction.
+
+**Threat protection**
+
+- SQL injection prevention, API rate limiting, and session hardening.
+
+**Key management**
+
+- Wrapping key rotation and Shamir’s Secret Sharing-based key backups.
+
+---
+
+# Specialized data protection features
+
+## PII / PHI / KYC Data Tokenization / User Table Replacement
+
+Databunker Pro enables secure tokenization for full personal profiles (PII/PHI/KYC):
+
+- Accepts complete user profile JSON objects and generates a single token representing the full profile.
+- Builds secure hash-based search indexes automatically for searchable fields (e.g., email, phone number, login names), allowing efficient, privacy-preserving lookups.
+- Dynamic token expiration options, supporting both sliding and final expiration modes.
+- Tokens can be safely stored and used across internal systems without revealing sensitive information.
+
+## Credit card tokenization
+
+For sensitive payment data, Databunker Pro offers dedicated credit card tokenization capabilities:
+
+- Each credit card is tokenized into a secure, unique identifier.
+- Supports **unique token generation** (same card → same token if enabled).
+- Dynamic token expiration options, supporting both sliding and final expiration modes
+- **Bulk tokenization support**: tokenize multiple credit cards efficiently in a single API request, with per-record expiration and validation.
+
+---
+
+## Real-world applications
+
+Organizations across industries use Databunker Pro to protect critical personal data:
+
+- **Financial Services**: Safeguarding customer PII while maintaining regulatory compliance.
+- **Healthcare Providers**: Protecting PHI with HIPAA-aligned security controls.
+- **E-commerce Platforms**: Managing customer data with GDPR compliance and strong privacy controls.
+- **SaaS Providers**: Implementing true multi-tenant security for user data.
+
+---
+
+## Why Choose Databunker Pro?
+
+Databunker Pro is more than just encryption — it’s a **privacy-by-design** foundation for modern organizations. With its advanced encryption model, built-in privacy controls, scalable architecture, and rich integration ecosystem, Databunker Pro empowers you to protect sensitive data, comply with regulations, and earn customer trust.

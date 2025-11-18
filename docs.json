@@ -18,10 +18,15 @@
             "groups": [
               {
                 "group": "Get started",
-                "pages": ["pro/overview"]
+                "icon": "rocket",
+                "pages": [
+                  "pro/get-started/overview",
+                  "pro/get-started/architecture"
+                ]
               },
               {
                 "group": "Installation",
+                "icon": "download",
                 "pages": [
                   "pro/installation/kubernetes-helm",
                   "pro/installation/docker-compose",
