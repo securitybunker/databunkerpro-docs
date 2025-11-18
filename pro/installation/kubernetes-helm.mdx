@@ -1,0 +1,86 @@
+---
+title: Install with Kubernetes using Helm
+sidebarTitle: Kubernetes with Helm
+description: This page walks you through the steps to install Databunker Pro on Kubernetes using Helm.
+---
+
+## Before you start
+
+To complete this guide, you'll need:
+
+- [Kubernetes](https://kubernetes.io/docs/setup/) installed
+- [Helm](https://helm.sh/docs/intro/install/) installed
+
+## Set up the Helm repository
+
+In this step, you'll set up the Databunker Pro Helm repository so that you can download the latest Helm charts.
+
+<Steps>
+<Step title="Add the Databunker Pro Helm repository">
+
+```sh
+helm repo add databunkerpro https://securitybunker.github.io/databunkerpro-setup
+```
+
+</Step>
+<Step title="Verify the repository was added">
+
+```sh
+helm repo list
+```
+
+You'll see the following output:
+
+```plain
+NAME            URL
+databunkerpro   https://securitybunker.github.io/databunkerpro-setup
+```
+
+</Step>
+<Step title="Download the latest Helm chart">
+
+```sh
+helm repo update
+```
+
+</Step>
+</Steps>
+
+<Note>
+  You can find the Helm charts in the
+  [databunkerpro-setup](https://github.com/securitybunker/databunkerpro-setup)
+  repository.
+</Note>
+
+## Deploy Databunker Pro using Helm
+
+<Steps>
+<Step title="Install the Databunker Helm chart">
+
+```sh
+helm install databunkerpro databunkerpro/databunkerpro
+```
+
+</Step>
+<Step title="Set up port forwarding">
+
+```sh
+kubectl port-forward service/databunkerpro 3000:3000
+```
+
+For more information about port-forwarding in Kubernetes, see [Use Port Forwarding to Access Applications in a Cluster](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/).
+
+</Step>
+
+<Step title="Access the web interface">
+  In your browser, open [localhost:3000](http://localhost:3000) to access the
+  Databunker web interface.
+</Step>
+
+<Step title="Follow the instructions in web interface">
+
+For detailed instructions, see [Generate admin credentials](/pro/installation/generate-admin-credentials).
+
+</Step>
+
+</Steps>

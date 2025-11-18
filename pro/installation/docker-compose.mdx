@@ -1,0 +1,89 @@
+---
+title: Install with Docker Compose
+sidebarTitle: Docker Compose
+description: This page walks you through the steps to install Databunker Pro using Docker Compose.
+---
+
+## Before you start
+
+To complete this guide, you'll need [Docker Compose](https://docs.docker.com/compose/install/) installed on your computer.
+
+To confirm if Docker Compose is available, run the following command:
+
+```sh
+docker compose version
+```
+
+## Clone the setup repository
+
+The repository contains configuration and helper scripts to help you get started.
+
+```sh
+git clone https://github.com/securitybunker/databunkerpro-setup.git
+cd databunkerpro-setup
+```
+
+## Generate configuration files
+
+In this step, you'll generate a set of environment files that will be used to configure each of the services deployed by Docker Compose.
+
+<Steps>
+<Step title="Choose your preferred database">
+This determines the database that Docker Compose should deploy. You don't need an existing database.
+
+<Tabs>
+<Tab title="PostgreSQL">
+
+```sh
+cd docker-compose-pgsql
+```
+
+</Tab>
+<Tab title="MySQL (Percona)">
+
+```sh
+cd docker-compose-mysql
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="Generate environment files">
+
+The following command will create a `.env` directory containing environment files for each Docker Compose service.
+
+```sh
+./generate-env-files.sh
+```
+
+</Step>
+</Steps>
+
+## Deploy Databunker Pro using Docker Compose
+
+<Steps>
+<Step title="Start Docker Compose services">
+
+```sh
+docker compose up -d
+```
+
+</Step>
+<Step title="Access the web interface">
+In your browser, open [localhost:3000](http://localhost:3000) to access the Databunker web interface.
+</Step>
+<Step title="Follow the instructions in web interface">
+For detailed instructions, see [Generate admin credentials](/pro/installation/generate-admin-credentials).
+</Step>
+</Steps>
+
+<Note>
+
+To stop all Docker Compose services and clean up resources, run the following command:
+
+```sh
+docker compose down
+```
+
+</Note>

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Databunker",
+  "colors": {
+    "primary": "#2563eb",
+    "light": "#89A3EB",
+    "dark": "#2563eb"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "products": [
+      {
+        "product": "Databunker Pro",
+        "tabs": [
+          {
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Get started",
+                "pages": ["pro/overview"]
+              },
+              {
+                "group": "Installation",
+                "pages": [
+                  "pro/installation/kubernetes-helm",
+                  "pro/installation/docker-compose",
+                  "pro/installation/generate-admin-credentials"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Reference",
+            "openapi": {
+              "source": "pro/api/openapi.yml",
+              "directory": "pro/api"
+            }
+          }
+        ]
+      },
+      {
+        "product": "Databunker OSS",
+        "tabs": [
+          {
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Get started",
+                "pages": ["oss/overview"]
+              }
+            ]
+          },
+          {
+            "tab": "Reference",
+            "openapi": {
+              "source": "oss/api/openapi.yml",
+              "directory": "oss/api"
+            }
+          }
+        ]
+      },
+      {
+        "product": "Databunker Zero-Trust",
+        "tabs": [
+          {
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Get started",
+                "pages": ["zero-trust/overview"]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/securitybunker/databunker"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Book a call",
+      "href": "https://cal.com/databunker-team/30min?overlayCalendar=true"
+    }
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/securitybunker",
+      "linkedin": "https://linkedin.com/company/databunker"
+    }
+  }
+}
