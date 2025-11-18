@@ -18,7 +18,6 @@
             "groups": [
               {
                 "group": "Get started",
-                "icon": "rocket",
                 "pages": [
                   "pro/get-started/overview",
                   "pro/get-started/pii-vault",
@@ -28,7 +27,6 @@
               },
               {
                 "group": "Installation",
-                "icon": "download",
                 "pages": [
                   "pro/installation/kubernetes-helm",
                   "pro/installation/docker-compose",
@@ -37,7 +35,6 @@
               },
               {
                 "group": "Administration",
-                "icon": "cog",
                 "pages": [
                   "pro/administration/overview",
                   "pro/administration/master-key",
@@ -49,7 +46,6 @@
               },
               {
                 "group": "Concepts",
-                "icon": "brain",
                 "pages": [
                   "pro/concepts/tokenization",
                   "pro/concepts/fuzzy-search"
