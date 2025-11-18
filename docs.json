@@ -36,7 +36,7 @@
               {
                 "group": "Administration",
                 "pages": [
-                  "pro/administration/overview",
+                  "pro/administration/security-overview",
                   "pro/administration/master-key",
                   "pro/administration/key-rotation",
                   "pro/administration/shamir-keys",
@@ -107,7 +107,7 @@
     ],
     "primary": {
       "type": "button",
-      "label": "Book a call",
+      "label": "Book a demo",
       "href": "https://cal.com/databunker-team/30min?overlayCalendar=true"
     }
   },
