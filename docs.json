@@ -21,6 +21,7 @@
                 "icon": "rocket",
                 "pages": [
                   "pro/get-started/overview",
+                  "pro/get-started/pii-vault",
                   "pro/get-started/architecture"
                 ]
               },

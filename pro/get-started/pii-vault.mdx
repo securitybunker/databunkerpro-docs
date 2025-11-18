@@ -1,0 +1,261 @@
+---
+title: PII Vault - PII Storage & Tokenization in Databunker Pro
+sidebarTitle: PII Data Vault
+---
+
+In today's data-driven world, protecting personally identifiable information (PII) isn't just a compliance requirement—it's a business imperative. Databunker Pro's PII Vault provides enterprise-grade secure storage and tokenization for sensitive personal data, enabling organizations to build privacy-by-design solutions while maintaining operational efficiency.
+
+When sensitive data enters your system, Databunker instantly encrypts, tokenizes, and stores it in a secure vault. You get back a safe token to store anywhere — even in public databases.
+
+You can run Databunker in the cloud or on-premises, you can enable your enterprise customers to self-host their PII vault in any region, which solves PII export restrictions and reduces compliance risk.
+
+## 🔐 What is a PII Vault?
+
+The PII Vault is Databunker Pro's core feature that transforms how organizations handle sensitive personal data. Instead of storing PII directly in your application database, the PII Vault:
+
+- **Encrypts and tokenizes** entire user records using AES-256 encryption
+- **Generates secure UUID tokens** that can be safely stored anywhere
+- **Maintains searchable indexes** using secure hash-based lookups
+- **Provides audit trails** for every data access and modification
+- **Enables compliance** with GDPR, HIPAA, SOC2, and other privacy regulations
+
+## ⚠️ Why Use PII Vault Instead of Regular Database Tables?
+
+### Traditional Database Approach Problems
+
+```sql
+-- Traditional approach: PII stored in plain text or basic encryption
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255),           -- Exposed in logs, backups, queries
+    first_name VARCHAR(100),      -- Visible to all database users
+    last_name VARCHAR(100),       -- Accessible via SQL injection
+    phone VARCHAR(20),            -- Stored in application logs
+    ssn VARCHAR(11),              -- High-risk data exposure
+    created_at TIMESTAMP
+);
+```
+
+**Issues with this approach:**
+
+- ❌ **Data exposure** in logs, backups, and error messages
+- ❌ **SQL injection vulnerabilities** expose sensitive data
+- ❌ **Database admin access** reveals all personal information
+- ❌ **Compliance complexity** requires extensive additional controls
+- ❌ **Breach impact** exposes all stored PII immediately
+
+### Databunker Pro PII Vault Solution
+
+Instead of storing PII in your application database, store only the user secure tokens (in UUID format):
+
+```sql
+-- Modern approach: Only tokens stored in application database
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    user_token UUID              -- Safe to store anywhere
+);
+```
+
+**Benefits of this approach:**
+
+- ✅ **Zero PII exposure** in application databases, logs, or backups
+- ✅ **Breach protection** - attackers only see meaningless tokens
+- ✅ **Built-in compliance** with privacy regulations
+- ✅ **Simplified architecture** - no complex encryption management
+- ✅ **Audit-ready** with comprehensive access logging
+
+## ⚙️ How PII Vault Works
+
+### 1. Data Ingestion and Tokenization
+
+When sensitive data enters your system, Databunker Pro:
+
+1. **Accepts complete user profiles** in JSON format
+2. **Extracts searchable fields** (email, phone, login, custom) for indexing
+3. **Encrypts the entire record** using AES-256 encryption
+4. **Generates a secure UUID token** for the record
+5. **Stores encrypted data** in the secure vault
+6. **Creates hashed search indexes** for efficient lookups
+
+### 2. Secure Storage Architecture
+
+![Databunker Architecture](/pro/get-started/databunker-short-diagram.png)
+
+## 💻 Code Examples: Storing and Retrieving User Records
+
+### Storing User PII
+
+**REST API Example:**
+
+```bash
+curl -X POST https://your-databunker-pro/v2/UserCreate \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile": {
+      "email": "john.doe@example.com",
+      "first": "John",
+      "last": "Doe",
+      "phone": "+1-555-123-4567",
+      "ssn": "123-45-6789",
+      "address": "123 Main St, City, State 12345",
+      "dob": "1985-06-15"
+    }
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "token": "a21fa1d3-5e47-11ef-a729-32e05c6f6c16"
+}
+```
+
+**JavaScript/Node.js Example:**
+
+```javascript
+const axios = require("axios");
+
+async function storeUserPII(userData) {
+  try {
+    const response = await axios.post(
+      "https://your-databunker-pro/v2/UserCreate",
+      {
+        profile: {
+          email: userData.email,
+          first: userData.firstName,
+          last: userData.lastName,
+          phone: userData.phone,
+          ssn: userData.ssn,
+          address: userData.address,
+          dob: userData.dateOfBirth,
+        },
+      },
+      {
+        headers: {
+          "X-Bunker-Token": process.env.DATABUNKER_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return response.data.token; // Store this token in your database
+  } catch (error) {
+    console.error("Error storing user PII:", error);
+    throw error;
+  }
+}
+
+// Usage
+const userToken = await storeUserPII({
+  email: "jane.smith@example.com",
+  firstName: "Jane",
+  lastName: "Smith",
+  phone: "+1-555-987-6543",
+  ssn: "987-65-4321",
+  address: "456 Oak Ave, City, State 54321",
+  dateOfBirth: "1990-03-22",
+});
+```
+
+**Python Example:**
+
+```python
+import requests
+import json
+
+def store_user_pii(user_data):
+    url = "https://your-databunker-pro/v2/UserCreate"
+    headers = {
+        "X-Bunker-Token": "YOUR_API_KEY",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "profile": {
+            "email": user_data["email"],
+            "first": user_data["first_name"],
+            "last": user_data["last_name"],
+            "phone": user_data["phone"],
+            "ssn": user_data["ssn"],
+            "address": user_data["address"],
+            "dob": user_data["date_of_birth"]
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    response.raise_for_status()
+
+    return response.json()["token"]
+
+# Usage
+user_token = store_user_pii({
+    "email": "mike.johnson@example.com",
+    "first_name": "Mike",
+    "last_name": "Johnson",
+    "phone": "+1-555-456-7890",
+    "ssn": "456-78-9012",
+    "address": "789 Pine St, City, State 67890",
+    "date_of_birth": "1988-11-08"
+})
+```
+
+### Retrieving User PII
+
+**Retrieve by Token:**
+
+```bash
+curl -X POST https://your-databunker-pro/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "token",
+    "identity": "a21fa1d3-5e47-11ef-a729-32e05c6f6c16"
+  }'
+```
+
+**Retrieve by Email:**
+
+```bash
+curl -X POST https://your-databunker-pro/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "john.doe@example.com"
+  }'
+```
+
+**Retrieve by Phone:**
+
+```bash
+curl -X POST https://your-databunker-pro/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "phone",
+    "identity": "+1-555-123-4567"
+  }'
+```
+
+## 🛡️ Enterprise Security Features
+
+Databunker Pro provides enterprise-grade security with **AES-256 encryption**, **role-based access control**, and **comprehensive audit logging**. Built-in compliance with **DPDPA, GDPR, HIPAA, SOC2, and PCI DSS** standards, plus **multi-tenant isolation** and **horizontal scaling** for enterprise deployment.
+
+## 🎯 Conclusion
+
+Databunker Pro's PII Vault transforms how organizations handle sensitive data, providing enterprise-grade security that goes far beyond traditional database approaches.
+
+**Key Benefits:**
+
+- **🔒 Zero PII Exposure** - Sensitive data never touches your application databases, logs, or backups
+- **⚡ Simplified Compliance** - Built-in GDPR, HIPAA, SOC2, and PCI DSS controls with automatic audit trails
+- **🛡️ Breach Protection** - Attackers only see meaningless tokens, not actual personal data
+- **🚀 Developer-Friendly** - Easy-to-use APIs that don't slow down development
+- **📈 Enterprise Scale** - Horizontal scaling with multi-region deployment options
+
+**The Bottom Line:** Instead of building complex security layers around your existing database, Databunker Pro's PII Vault eliminates the risk at the source. Your sensitive data stays secure in an encrypted vault while your applications work with safe tokens.
+
+Ready to eliminate PII exposure and simplify compliance? The PII Vault is the modern solution for privacy-by-design architecture.
