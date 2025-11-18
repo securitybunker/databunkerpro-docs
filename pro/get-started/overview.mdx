@@ -4,35 +4,16 @@ sidebarTitle: "Overview"
 description: "Built on 5 years of open-source use, Databunker Pro adds the features businesses need."
 ---
 
-## How Databunker Works
+Databunker Pro is a commercial version of Databunker that includes features for Enterprise users.
 
-When sensitive data enters your system, Databunker instantly **encrypts, tokenizes, and stores it in a secure vault**. You get back a safe token to store anywhere — even in public databases.
+For pricing information, see [Pricing](https://databunker.org/plans/).
 
-You can run Databunker in the cloud or on-premises, you can enable your enterprise customers to self-host their PII vault in any region, which solves PII export restrictions and reduces compliance risk.
+Databunker Pro extends Databunker with the following features:
 
-Only authorized requests can retrieve the original data. Even if your application database is breached, attackers get meaningless tokens.
-
-## ⚡ Developer-Friendly API
-
-Databunker Pro comes with ready-to-use SDKs and APIs for popular programming languages, enabling fast and straightforward integration.
-
-```bash
-curl -X POST https://databunker-pro/v2/UserCreate \
-  -H "X-Bunker-Token: API_KEY" \
-  -d '{"profile":{"email": "alice@example.com"}}'
-
-# Response
-{"token": "a21fa1d3-..."}
-```
-
-## Why Databunker Pro?
-
-Built on 5 years of open-source use, Databunker Pro adds the features businesses need:
-
-- Enterprise security features: <a href="/databunker-pro-docs/multi-tenancy/" target="_blank">multi-tenancy</a>, <a href="/databunker-pro-docs/wrapping-key/" target="_blank">key rotation</a>, and <a href="/databunker-pro-docs/shamir-keys/" target="_blank">Shamir’s secret sharing</a>
-- Advanced tokenization: <a href="/databunker-pro-docs/tokenization/" target="_blank">Credit card and format-preserving tokenization API</a>
-- Available for Kubernetes, OpenShift, and Docker Compose
-- Professional support
+- [Multi-tenancy](/pro/administration/multi-tenancy)
+- [Key rotation](/pro/administration/key-rotation)
+- [Shamir's secret sharing](/pro/administration/shamir-keys)
+- [Format-preserving tokenization](/pro/administration/tokenization)
 
 ## Try it out for yourself
 
