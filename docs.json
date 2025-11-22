@@ -48,7 +48,8 @@
                 "group": "Concepts",
                 "pages": [
                   "pro/concepts/tokenization",
-                  "pro/concepts/fuzzy-search"
+                  "pro/concepts/fuzzy-search",
+                  "pro/concepts/record-versioning"
                 ]
               },
               {
