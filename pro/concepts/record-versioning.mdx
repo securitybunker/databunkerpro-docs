@@ -1,0 +1,627 @@
+---
+title: Record versioning
+sidebarTitle: Versioning
+---
+
+**Record Versioning** in Databunker Pro provides automatic version history tracking for user profiles and application data. Every time a record is created or updated, Databunker Pro automatically creates a new version, allowing you to track changes over time, audit data modifications, and restore previous states when needed.
+
+## Configuration
+
+Record versioning is **not enabled by default**. To enable versioning, you need to configure it in your `databunker.yaml` configuration file:
+
+```yaml
+versioning:
+  enabled: true
+  max_versions: 10
+  max_version_retention_period: "1m"
+```
+
+After enabling versioning in the configuration file, restart your Databunker Pro instance for the changes to take effect.
+
+## What Problems Does Record Versioning Solve?
+
+### 1. **Change History & Data Integrity**
+
+- ✅ Complete history of all data changes over time
+- ✅ Track what changed and when it changed
+- ✅ Verify data integrity with cryptographic hashes
+- ✅ Maintain immutable record of data evolution
+
+### 2. **Data Recovery & Rollback**
+
+- ✅ Restore previous versions of user data
+- ✅ Recover from accidental data modifications
+- ✅ Undo unwanted changes quickly
+- ✅ Maintain data consistency across systems
+
+### 3. **Change Tracking & Analysis**
+
+- ✅ Understand how user data evolves over time
+- ✅ Analyze patterns in data modifications
+- ✅ Identify data quality issues
+- ✅ Support forensic investigations
+
+## How Record Versioning Works
+
+Databunker Pro automatically creates a new version every time you:
+
+- Create a new user record
+- Update a user profile
+- Create application data
+- Update application data
+
+Each version includes:
+
+- **Version number**: Sequential integer starting from 1
+- **Operation time**: Unix timestamp of when the version was created
+- **MD5 hash**: Cryptographic hash for integrity verification
+- **Full record data**: Complete snapshot of the record at that point in time
+
+## Supported Record Types
+
+Record versioning is available for:
+
+| Record Type | API Endpoints | Use Case |
+|------------|---------------|----------|
+| **User Profiles** | `UserListVersions`, `UserGet` (with version) | Track user profile changes, email updates, phone number changes |
+| **Application Data** | `AppdataListVersions`, `AppdataGet` (with version) | Track application-specific data changes, configuration updates |
+
+## User Profile Versioning
+
+### Listing User Versions
+
+To see all versions of a user's profile:
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/UserListVersions" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "token",
+    "identity": "user-token-here"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "versions": [
+    {
+      "version": 1,
+      "optime": 1699123456,
+      "md5": "a1b2c3d4e5f6..."
+    },
+    {
+      "version": 2,
+      "optime": 1699123500,
+      "md5": "b2c3d4e5f6a1..."
+    },
+    {
+      "version": 3,
+      "optime": 1699123600,
+      "md5": "c3d4e5f6a1b2..."
+    }
+  ]
+}
+```
+
+### Retrieving a Specific User Version
+
+To retrieve a specific version of a user's profile:
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/UserGet" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "token",
+    "identity": "user-token-here",
+    "version": 1
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "token": "user-token-here",
+  "profile": {
+    "login": "versionuser",
+    "email": "versionuser@email.com"
+  },
+  "version": 1
+}
+```
+
+### JavaScript/TypeScript Example
+
+```javascript
+import DatabunkerproAPI from "databunkerpro-js";
+
+const client = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "your-token"
+);
+
+// Step 1: Create a user
+const createResponse = await client.userCreate({
+  profile: {
+    login: "versionuser",
+    email: "versionuser@email.com"
+  }
+});
+const userToken = createResponse.token;
+
+// Step 2: Update the user profile
+await client.userUpdate({
+  mode: "token",
+  identity: userToken,
+  profile: {
+    login: "versionuser",
+    email: "versionuser2@email.com"
+  }
+});
+
+// Step 3: Update again
+await client.userUpdate({
+  mode: "token",
+  identity: userToken,
+  profile: {
+    login: "versionuser",
+    email: "versionuser3@email.com"
+  }
+});
+
+// Step 4: List all versions
+const versionsResponse = await client.userListVersions({
+  mode: "token",
+  identity: userToken
+});
+
+console.log("User versions:", versionsResponse.versions);
+// Output: [
+//   { version: 1, optime: 1699123456, md5: "..." },
+//   { version: 2, optime: 1699123500, md5: "..." },
+//   { version: 3, optime: 1699123600, md5: "..." }
+// ]
+
+// Step 5: Retrieve a specific version
+const version1 = await client.userGet({
+  mode: "token",
+  identity: userToken,
+  version: 1
+});
+
+console.log("Version 1 email:", version1.profile.email);
+// Output: "versionuser@email.com"
+
+const version2 = await client.userGet({
+  mode: "token",
+  identity: userToken,
+  version: 2
+});
+
+console.log("Version 2 email:", version2.profile.email);
+// Output: "versionuser2@email.com"
+```
+
+### Python Example
+
+```python
+from databunkerpro import DatabunkerproAPI
+
+api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance",
+    x_bunker_token="YOUR_ACCESS_TOKEN"
+)
+
+# Step 1: Create a user
+create_response = api.user_create({
+    "profile": {
+        "login": "versionuser",
+        "email": "versionuser@email.com"
+    }
+})
+user_token = create_response["token"]
+
+# Step 2: Update the user profile
+api.user_update({
+    "mode": "token",
+    "identity": user_token,
+    "profile": {
+        "login": "versionuser",
+        "email": "versionuser2@email.com"
+    }
+})
+
+# Step 3: Update again
+api.user_update({
+    "mode": "token",
+    "identity": user_token,
+    "profile": {
+        "login": "versionuser",
+        "email": "versionuser3@email.com"
+    }
+})
+
+# Step 4: List all versions
+versions_response = api.user_list_versions({
+    "mode": "token",
+    "identity": user_token
+})
+
+print("User versions:", versions_response["versions"])
+# Output: [
+#   {"version": 1, "optime": 1699123456, "md5": "..."},
+#   {"version": 2, "optime": 1699123500, "md5": "..."},
+#   {"version": 3, "optime": 1699123600, "md5": "..."}
+# ]
+
+# Step 5: Retrieve a specific version
+version1 = api.user_get({
+    "mode": "token",
+    "identity": user_token,
+    "version": 1
+})
+
+print("Version 1 email:", version1["profile"]["email"])
+# Output: "versionuser@email.com"
+
+version2 = api.user_get({
+    "mode": "token",
+    "identity": user_token,
+    "version": 2
+})
+
+print("Version 2 email:", version2["profile"]["email"])
+# Output: "versionuser2@email.com"
+```
+
+## Application Data Versioning
+
+Application data versioning works similarly to user profile versioning, but tracks changes to application-specific data associated with users.
+
+### Listing Appdata Versions
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/AppdataListVersions" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "token",
+    "identity": "user-token-here",
+    "appname": "mytestapp"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "versions": [
+    {
+      "version": 1,
+      "optime": 1699123456,
+      "md5": "a1b2c3d4e5f6..."
+    },
+    {
+      "version": 2,
+      "optime": 1699123500,
+      "md5": "b2c3d4e5f6a1..."
+    },
+    {
+      "version": 3,
+      "optime": 1699123600,
+      "md5": "c3d4e5f6a1b2..."
+    }
+  ]
+}
+```
+
+### Retrieving a Specific Appdata Version
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/AppdataGet" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "token",
+    "identity": "user-token-here",
+    "appname": "mytestapp",
+    "version": 1
+  }'
+```
+
+### JavaScript/TypeScript Example
+
+```javascript
+import DatabunkerproAPI from "databunkerpro-js";
+
+const client = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "your-token"
+);
+
+// Step 1: Create user
+const userResponse = await client.userCreate({
+  profile: {
+    login: "appuser0",
+    email: "appuser0@email.com"
+  }
+});
+const userToken = userResponse.token;
+
+// Step 2: Create appdata
+await client.appdataCreate({
+  appname: "mytestapp",
+  mode: "token",
+  identity: userToken,
+  appdata: {
+    score: 0,
+    note: "init"
+  }
+});
+
+// Step 3: Update appdata multiple times
+for (let v = 1; v <= 3; v++) {
+  await client.appdataUpdate({
+    appname: "mytestapp",
+    mode: "token",
+    identity: userToken,
+    appdata: {
+      score: v,
+      note: `update${v}`
+    }
+  });
+}
+
+// Step 4: List all appdata versions
+const versionsResponse = await client.appdataListVersions({
+  appname: "mytestapp",
+  mode: "token",
+  identity: userToken
+});
+
+console.log("Appdata versions:", versionsResponse.versions);
+// Output: [
+//   { version: 1, optime: 1699123456, md5: "..." },
+//   { version: 2, optime: 1699123500, md5: "..." },
+//   { version: 3, optime: 1699123600, md5: "..." },
+//   { version: 4, optime: 1699123700, md5: "..." }
+// ]
+
+// Step 5: Retrieve a specific version
+const version1 = await client.appdataGet({
+  appname: "mytestapp",
+  mode: "token",
+  identity: userToken,
+  version: 1
+});
+
+console.log("Version 1 appdata:", version1.appdata);
+// Output: { score: 0, note: "init" }
+
+const version2 = await client.appdataGet({
+  appname: "mytestapp",
+  mode: "token",
+  identity: userToken,
+  version: 2
+});
+
+console.log("Version 2 appdata:", version2.appdata);
+// Output: { score: 1, note: "update1" }
+```
+
+### Python Example
+
+```python
+from databunkerpro import DatabunkerproAPI
+
+api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance",
+    x_bunker_token="YOUR_ACCESS_TOKEN"
+)
+
+# Step 1: Create user
+user_response = api.user_create({
+    "profile": {
+        "login": "appuser0",
+        "email": "appuser0@email.com"
+    }
+})
+user_token = user_response["token"]
+
+# Step 2: Create appdata
+api.appdata_create({
+    "appname": "mytestapp",
+    "mode": "token",
+    "identity": user_token,
+    "appdata": {
+        "score": 0,
+        "note": "init"
+    }
+})
+
+# Step 3: Update appdata multiple times
+for v in range(1, 4):
+    api.appdata_update({
+        "appname": "mytestapp",
+        "mode": "token",
+        "identity": user_token,
+        "appdata": {
+            "score": v,
+            "note": f"update{v}"
+        }
+    })
+
+# Step 4: List all appdata versions
+versions_response = api.appdata_list_versions({
+    "appname": "mytestapp",
+    "mode": "token",
+    "identity": user_token
+})
+
+print("Appdata versions:", versions_response["versions"])
+
+# Step 5: Retrieve a specific version
+version1 = api.appdata_get({
+    "appname": "mytestapp",
+    "mode": "token",
+    "identity": user_token,
+    "version": 1
+})
+
+print("Version 1 appdata:", version1["appdata"])
+# Output: {"score": 0, "note": "init"}
+
+version2 = api.appdata_get({
+    "appname": "mytestapp",
+    "mode": "token",
+    "identity": user_token,
+    "version": 2
+})
+
+print("Version 2 appdata:", version2["appdata"])
+# Output: {"score": 1, "note": "update1"}
+```
+
+## Real-World Use Cases
+
+### 1. **Compliance & Audit Requirements**
+
+Many regulations require maintaining a complete history of data changes:
+
+```javascript
+// Track all changes to user email for GDPR compliance
+const versions = await client.userListVersions({
+  mode: "token",
+  identity: userToken
+});
+
+// Generate audit report
+const auditReport = versions.versions.map(v => ({
+  version: v.version,
+  timestamp: new Date(v.optime * 1000),
+  hash: v.md5
+}));
+```
+
+### 2. **Data Recovery**
+
+Restore previous versions when data is accidentally modified:
+
+```javascript
+// User's email was accidentally changed
+// Restore from version 2
+const previousVersion = await client.userGet({
+  mode: "token",
+  identity: userToken,
+  version: 2
+});
+
+// Restore the email
+await client.userUpdate({
+  mode: "token",
+  identity: userToken,
+  profile: {
+    email: previousVersion.profile.email
+  }
+});
+```
+
+### 3. **Change Analysis**
+
+Analyze how user data changes over time:
+
+```javascript
+// Get all versions and compare changes
+const versions = await client.userListVersions({
+  mode: "token",
+  identity: userToken
+});
+
+for (const v of versions.versions) {
+  const record = await client.userGet({
+    mode: "token",
+    identity: userToken,
+    version: v.version
+  });
+  
+  console.log(`Version ${v.version}:`, {
+    timestamp: new Date(v.optime * 1000),
+    email: record.profile.email
+  });
+}
+```
+
+### 4. **Application State Management**
+
+Track changes to application-specific data:
+
+```javascript
+// Track score changes in a game application
+const versions = await client.appdataListVersions({
+  appname: "gameapp",
+  mode: "token",
+  identity: userToken
+});
+
+// Find when score reached certain milestones
+for (const v of versions.versions) {
+  const appdata = await client.appdataGet({
+    appname: "gameapp",
+    mode: "token",
+    identity: userToken,
+    version: v.version
+  });
+  
+  if (appdata.appdata.score >= 1000) {
+    console.log(`Score milestone reached at version ${v.version}`);
+  }
+}
+```
+
+## Security Considerations
+
+### Access Control
+
+Record versioning respects Databunker Pro's Conditional Role-Based Access Control (CRBAC):
+
+- **Policy Enforcement**: Access to version history is controlled by policies
+- **Audit Logging**: All version access operations are logged
+
+### Privacy Protection
+
+- **Encrypted Storage**: All version data remains encrypted at rest
+- **Secure Transmission**: Version requests use HTTPS encryption
+- **Access Logging**: Complete audit trail of all version access activities
+
+## Version Metadata
+
+Each version includes important metadata:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | integer | Sequential version number (starts at 1) |
+| `optime` | integer | Unix timestamp when the version was created |
+| `md5` | string | MD5 hash of the version data for integrity verification |
+
+## Conclusion
+
+Databunker Pro's Record Versioning feature provides a powerful, secure, and efficient way to track changes to user profiles and application data. By automatically maintaining a complete version history with cryptographic integrity verification, it enables applications to:
+
+- Meet compliance and audit requirements
+- Recover from accidental data modifications
+- Analyze data changes over time
+- Maintain data integrity and security
+
+The versioning capability is particularly valuable for:
+
+- Compliance-driven applications (GDPR, HIPAA, etc.)
+- Applications requiring audit trails
+- Systems with frequent data updates
+- Applications needing data recovery capabilities
