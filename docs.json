@@ -108,7 +108,7 @@
     ],
     "primary": {
       "type": "button",
-      "label": "Book a demo",
+      "label": "Book a Demo",
       "href": "https://cal.com/databunker-team/30min?overlayCalendar=true"
     }
   },
