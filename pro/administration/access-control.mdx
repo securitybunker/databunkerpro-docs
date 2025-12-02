@@ -37,7 +37,7 @@ You can use the following policy to grant parents access to their child's PII an
 {
   "Effect": "Allow",
   "Principal": { "Role": "parent" },
-  "Action": ["READ", "WRITE", "LIST"],
+  "Action": ["UserGet", "UserUpdate", "BulkListGroupUsers"],
   "Resource": [
     "${target_group_members:role/child}.profile",
     "${target_group_members:role/child}.consent"
@@ -58,7 +58,7 @@ This policy will grant to a teacher entity access to the student's parent inform
 {
   "Effect": "Allow",
   "Principal": { "Role": "teacher" },
-  "Action": ["READ", "LIST"],
+  "Action": ["UserGet", "BulkListGroupUsers"],
   "Resource": [
     "${target_group_members:role/parent}.profile.name",
     "${target_group_members:role/parent}.profile.phone"

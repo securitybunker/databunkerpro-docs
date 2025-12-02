@@ -1,0 +1,479 @@
+---
+title: Sub-accounts
+sidebarTitle: Sub-accounts
+---
+
+**Sub-accounts** (also referred to as **hierarchical accounts**) in Databunker Pro enable organizations to create isolated account structures within their Databunker Pro instance. This feature is essential for businesses that need to manage multiple independent accounts, departments, or organizational units while maintaining data isolation and administrative control.
+
+## What Problems Do Sub-accounts Solve?
+
+### 1. **Organizational Structure Management**
+
+- ✅ Create isolated account spaces for different departments or business units
+- ✅ Maintain separate administrative control for each sub-account
+- ✅ Enable independent data management per sub-account
+- ✅ Support hierarchical organizational structures
+
+### 2. **Multi-tenant SaaS Applications**
+
+- ✅ Provide isolated data storage for each customer
+- ✅ Enable customer-specific administrative access
+- ✅ Maintain complete data separation between accounts
+- ✅ Support white-label or reseller scenarios
+
+### 3. **Compliance and Data Isolation**
+
+- ✅ Ensure complete data isolation between sub-accounts
+- ✅ Meet regulatory requirements for data separation
+- ✅ Enable independent audit trails per sub-account
+- ✅ Support compliance with data residency requirements
+
+## Implementation Approaches
+
+Databunker Pro provides two primary approaches for implementing sub-accounts:
+
+1. **Multi-tenancy Support** - Creates isolated tenants with dedicated admin tokens
+2. **Groups with Roles and Policies** - Uses Databunker Pro's CRBAC system for group-based management
+
+These approaches can also be combined together to create an even more flexible solution that leverages both database-level isolation from multi-tenancy and fine-grained access control from groups.
+
+## Approach 1: Multi-tenancy Support
+
+Multi-tenancy is the recommended approach when you need complete data isolation and independent administrative control for each sub-account. After creating a tenant, you receive a tenant admin token that allows full management of all records within that tenant.
+
+### How It Works
+
+When you create a new tenant using the multi-tenancy feature:
+
+1. A new isolated tenant is created with its own data namespace
+2. A **tenant admin token** is generated that provides full administrative access
+3. All records created within this tenant are completely isolated from other tenants at the database level using PostgreSQL's row-level security (RLS)
+4. The tenant admin token can manage all user records, application data, and configurations within the tenant
+
+Records are separated from one tenant to another at the database level. This separation is implemented using PostgreSQL's row-level security mechanism, which ensures that queries executed by specific tenants are restricted to their own records, providing complete data isolation.
+
+### Creating a Sub-account with Multi-tenancy
+
+```bash
+curl -H 'X-Bunker-Token: ROOT-ACCESS-TOKEN' \
+     -X POST https://your-databunker-instance/v2/TenantCreate \
+     -H 'Content-Type: application/json' \
+     --data '{
+       "tenantorg": "acme-corp",
+       "tenantname": "subaccount-001"
+     }'
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "xtoken": "TENANT-ADMIN-TOKEN-001"
+}
+```
+
+### Using the Tenant Admin Token
+
+Once you have the tenant admin token, you can use it to manage all records within that tenant:
+
+```bash
+# Create a user in the sub-account
+curl -H 'X-Bunker-Token: TENANT-ADMIN-TOKEN-001' \
+     -H 'X-Bunker-Tenant: subaccount-001' \
+     -H 'Content-Type: application/json' \
+     -X POST https://your-databunker-instance/v2/UserCreate \
+     --data '{
+       "profile": {
+         "login": "user1",
+         "email": "user1@subaccount-001.com",
+         "firstname": "John",
+         "lastname": "Doe"
+       }
+     }'
+```
+
+### JavaScript/TypeScript Example
+
+```javascript
+import DatabunkerproAPI from "databunkerpro-js";
+
+// Initialize root admin client
+const rootClient = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "ROOT-ACCESS-TOKEN"
+);
+
+// Step 1: Create a new sub-account (tenant)
+const tenantResponse = await rootClient.tenantCreate({
+  tenantorg: "acme-corp",
+  tenantname: "subaccount-001"
+});
+
+const tenantAdminToken = tenantResponse.xtoken;
+const tenantName = "subaccount-001";
+
+// Step 2: Initialize client with tenant admin token
+const tenantClient = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  tenantAdminToken
+);
+
+// Step 3: Create users in the sub-account
+const userResponse = await tenantClient.userCreate({
+  profile: {
+    login: "user1",
+    email: "user1@subaccount-001.com",
+    firstname: "John",
+    lastname: "Doe"
+  }
+});
+
+console.log("Sub-account created with tenant admin token:", tenantAdminToken);
+console.log("User created in sub-account:", userResponse.token);
+```
+
+### Python Example
+
+```python
+from databunkerpro import DatabunkerproAPI
+
+# Initialize root admin client
+root_api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance",
+    x_bunker_token="ROOT-ACCESS-TOKEN"
+)
+
+# Step 1: Create a new sub-account (tenant)
+tenant_response = root_api.tenant_create({
+    "tenantorg": "acme-corp",
+    "tenantname": "subaccount-001"
+})
+
+tenant_admin_token = tenant_response["xtoken"]
+tenant_name = "subaccount-001"
+
+# Step 2: Initialize client with tenant admin token
+tenant_api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance",
+    x_bunker_token=tenant_admin_token,
+    x_bunker_tenant=tenant_name
+)
+
+# Step 3: Create users in the sub-account
+user_response = tenant_api.user_create({
+    "profile": {
+        "login": "user1",
+        "email": "user1@subaccount-001.com",
+        "firstname": "John",
+        "lastname": "Doe"
+    }
+})
+
+print(f"Sub-account created with tenant admin token: {tenant_admin_token}")
+print(f"User created in sub-account: {user_response['token']}")
+```
+
+### Benefits of Multi-tenancy Approach
+
+- **Complete Data Isolation**: Each tenant has its own isolated data namespace
+- **Independent Administration**: Tenant admin tokens provide full control within the tenant
+- **Scalability**: Supports unlimited tenants with PostgreSQL row-level security
+- **Security**: Built-in tenant separation at the database level
+- **Compliance**: Meets data residency and isolation requirements
+
+## Approach 2: Groups with Roles and Policies
+
+The groups approach leverages Databunker Pro's Conditional Role-Based Access Control (CRBAC) system. Each group can store sub-accounts, and a group admin user manages all users within that group. This approach is implemented using roles and policies.
+
+### How It Works
+
+With the groups approach:
+
+1. Create a group to represent the sub-account
+2. Assign a **group admin** role to a user who will manage the sub-account
+3. Create policies that grant the group admin access to manage users within the group
+4. Add users to the group as needed
+5. The group admin can manage all users within their assigned group
+
+### Creating a Sub-account with Groups
+
+```bash
+# Step 1: Create a group admin user
+curl -H 'X-Bunker-Token: YOUR-ACCESS-TOKEN' \
+     -H 'Content-Type: application/json' \
+     -X POST https://your-databunker-instance/v2/UserCreate \
+     --data '{
+       "profile": {
+         "login": "group-admin-001",
+         "email": "admin@subaccount-001.com",
+         "firstname": "Admin",
+         "lastname": "User"
+       }
+     }'
+
+# Step 2: Create a group for the sub-account
+curl -H 'X-Bunker-Token: YOUR-ACCESS-TOKEN' \
+     -H 'Content-Type: application/json' \
+     -X POST https://your-databunker-instance/v2/GroupCreate \
+     --data '{
+       "groupname": "subaccount-001",
+       "description": "Sub-account group 001"
+     }'
+
+# Step 3: Add the group admin to the group with admin role
+curl -H 'X-Bunker-Token: YOUR-ACCESS-TOKEN' \
+     -H 'Content-Type: application/json' \
+     -X POST https://your-databunker-instance/v2/GroupAddUser \
+     --data '{
+       "groupname": "subaccount-001",
+       "mode": "token",
+       "identity": "USER-TOKEN-FROM-STEP-1",
+       "role": "group-admin"
+     }'
+```
+
+### Creating Policies for Group Admin
+
+Create a policy that allows the group admin to manage all users within their group:
+
+```bash
+curl -H 'X-Bunker-Token: YOUR-ACCESS-TOKEN' \
+     -H 'Content-Type: application/json' \
+     -X POST https://your-databunker-instance/v2/PolicyCreate \
+     --data '{
+       "policyname": "subaccount-admin-policy",
+       "policy": {
+         "Effect": "Allow",
+         "Principal": { "Role": "group-admin" },
+         "Action": [
+           "UserGet",
+           "UserCreate",
+           "UserUpdate",
+           "UserDelete",
+           "BulkListGroupUsers",
+           "BulkListUnlock",
+           "GroupListUserGroups"
+         ],
+         "Resource": [
+           "${target_group_members}.profile",
+           "${target_group_members}.consent",
+           "${target_group_members}.appdata"
+         ],
+         "Condition": {
+           "StringEquals": {
+             "${principal_group_id}": "${target_group_id}"
+           }
+         }
+       }
+     }'
+```
+
+### JavaScript/TypeScript Example
+
+```javascript
+import DatabunkerproAPI from "databunkerpro-js";
+
+const client = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "YOUR-ACCESS-TOKEN"
+);
+
+// Step 1: Create a group admin user
+const adminResponse = await client.userCreate({
+  profile: {
+    login: "group-admin-001",
+    email: "admin@subaccount-001.com",
+    firstname: "Admin",
+    lastname: "User"
+  }
+});
+const adminToken = adminResponse.token;
+
+// Step 2: Create a group for the sub-account
+await client.groupCreate({
+  groupname: "subaccount-001",
+  description: "Sub-account group 001"
+});
+
+// Step 3: Add the group admin to the group with admin role
+await client.groupAddUser({
+  groupname: "subaccount-001",
+  mode: "token",
+  identity: adminToken,
+  role: "group-admin"
+});
+
+// Step 4: Create policy for group admin
+await client.policyCreate({
+  policyname: "subaccount-admin-policy",
+  policy: {
+    Effect: "Allow",
+    Principal: { Role: "group-admin" },
+    Action: [
+      "UserGet",
+      "UserCreate",
+      "UserUpdate",
+      "UserDelete",
+      "BulkListGroupUsers",
+      "BulkListUnlock",
+      "GroupListUserGroups"
+    ],
+    Resource: [
+      "${target_group_members}.profile",
+      "${target_group_members}.consent",
+      "${target_group_members}.appdata"
+    ],
+    Condition: {
+      StringEquals: {
+        "${principal_group_id}": "${target_group_id}"
+      }
+    }
+  }
+});
+
+// Step 5: Group admin can now create users in their group
+const groupAdminClient = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  adminToken
+);
+
+// Create a user in the sub-account
+const userResponse = await groupAdminClient.userCreate({
+  profile: {
+    login: "user1",
+    email: "user1@subaccount-001.com",
+    firstname: "John",
+    lastname: "Doe"
+  }
+});
+
+// Add user to the group
+await groupAdminClient.groupAddUser({
+  groupname: "subaccount-001",
+  mode: "token",
+  identity: userResponse.token,
+  role: "member"
+});
+
+console.log("Sub-account created using groups approach");
+console.log("Group admin token:", adminToken);
+```
+
+### Benefits of Groups Approach
+
+- **Flexible Access Control**: Fine-grained permissions using CRBAC policies
+- **Role-Based Management**: Different roles can be assigned within groups
+- **Conditional Access**: Policies can include complex conditions for access control
+- **Compliance Support**: Supports FERPA, GDPR, and DPDPA compliance scenarios
+- **Hierarchical Structures**: Supports parent-child relationships within groups
+
+## Choosing the Right Approach
+
+### Use Multi-tenancy When:
+
+- You need **complete data isolation** between sub-accounts
+- Each sub-account requires **independent administrative control**
+- You're building a **multi-tenant SaaS application**
+- You need to meet **strict data residency requirements**
+- You want **database-level isolation** for security
+
+### Use Groups Approach When:
+
+- You need **flexible, role-based access control** within sub-accounts
+- You want to implement **hierarchical organizational structures**
+- You need **conditional access policies** (e.g., parent-child relationships)
+- You're building **compliance-focused applications** (FERPA, GDPR, DPDPA)
+- You want **fine-grained permissions** for different user roles
+
+## Real-World Use Cases
+
+### 1. **SaaS Multi-tenant Application**
+
+Create isolated sub-accounts for each customer:
+
+```javascript
+// Create a tenant for each customer
+const customerTenant = await rootClient.tenantCreate({
+  tenantorg: "saas-provider",
+  tenantname: `customer-${customerId}`
+});
+
+// Provide customer with their tenant admin token
+// Customer can now manage their own data independently
+```
+
+### 2. **Departmental Sub-accounts**
+
+Organize departments within an organization:
+
+```javascript
+// Create a group for each department
+await client.groupCreate({
+  groupname: "engineering-department",
+  description: "Engineering team sub-account"
+});
+
+// Assign department admin
+await client.groupAddUser({
+  groupname: "engineering-department",
+  mode: "token",
+  identity: deptAdminToken,
+  role: "group-admin"
+});
+```
+
+### 3. **Reseller/Partner Program**
+
+Enable partners to manage their own customer data:
+
+```javascript
+// Create tenant for each reseller
+const resellerTenant = await rootClient.tenantCreate({
+  tenantorg: "partner-program",
+  tenantname: `reseller-${resellerId}`
+});
+
+// Reseller gets tenant admin token to manage their customers
+```
+
+## Security Considerations
+
+### Multi-tenancy Security
+
+- **Row-Level Security**: PostgreSQL RLS ensures tenant data isolation
+- **Token-Based Access**: Tenant admin tokens are scoped to their tenant
+- **Audit Logging**: All tenant operations are logged separately
+- **Encryption**: Each tenant's data is encrypted independently
+
+### Groups Security
+
+- **Policy Enforcement**: CRBAC policies control all access
+- **Role Validation**: Roles are verified before granting access
+- **Condition Checks**: Policies include conditions for additional security
+- **Audit Trail**: All group operations are logged with role information
+
+## Best Practices
+
+1. **Token Management**: Securely store and rotate tenant admin tokens
+2. **Policy Design**: Design policies carefully to ensure proper access control
+3. **Regular Audits**: Review sub-account access and permissions regularly
+4. **Monitoring**: Monitor sub-account activity for security and compliance
+5. **Documentation**: Document which approach is used for each sub-account
+
+## Conclusion
+
+Databunker Pro provides two powerful approaches for implementing sub-accounts:
+
+- **Multi-tenancy** offers complete isolation and independent administration
+- **Groups with CRBAC** provides flexible, role-based access control
+
+Both approaches enable organizations to create secure, scalable sub-account structures that meet their specific requirements for data isolation, administrative control, and compliance.
+
+**The approaches can be combined together** to create an even more flexible solution that leverages database-level isolation from multi-tenancy and fine-grained access control from groups.
+
+Choose the approach that best fits your use case:
+- Use **multi-tenancy** for complete isolation and independent administration
+- Use **groups** for flexible role-based access control and hierarchical structures
+- **Combine both approaches** for maximum flexibility with database-level isolation and fine-grained permissions
+

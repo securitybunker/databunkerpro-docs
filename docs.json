@@ -49,7 +49,8 @@
                 "pages": [
                   "pro/concepts/tokenization",
                   "pro/concepts/fuzzy-search",
-                  "pro/concepts/record-versioning"
+                  "pro/concepts/record-versioning",
+                  "pro/concepts/sub-accounts"
                 ]
               },
               {
