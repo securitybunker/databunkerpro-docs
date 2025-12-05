@@ -18,7 +18,7 @@ info:
     All API calls require authentication via the `X-Bunker-Token` header. For multi-tenant setups, use the `X-Bunker-Tenant` header to specify the tenant context.
 
     ### Multi-Tenant Usage
-    Multi-tenancy is supported when DataBunker Pro is configured to work with PostgreSQL database.
+    Multi-tenancy is supported when DataBunker Pro is configured to work with PostgreSQL database. **Note:** DataBunker Pro supports both PostgreSQL and MySQL (Percona) as backend databases, but multi-tenancy requires PostgreSQL and is not available with MySQL.
 
     When using DataBunker Pro in a multi-tenant environment:
 

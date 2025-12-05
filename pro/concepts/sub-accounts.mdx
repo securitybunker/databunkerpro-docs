@@ -47,7 +47,7 @@ When you create a new tenant using the multi-tenancy feature:
 
 1. A new isolated tenant is created with its own data namespace
 2. A **tenant admin token** is generated that provides full administrative access
-3. All records created within this tenant are completely isolated from other tenants at the database level using PostgreSQL's row-level security (RLS)
+3. All records created within this tenant are completely isolated from other tenants at the database level using PostgreSQL's row-level security (RLS). **Note:** Multi-tenancy requires PostgreSQL and is not supported with MySQL.
 4. The tenant admin token can manage all user records, application data, and configurations within the tenant
 
 Records are separated from one tenant to another at the database level. This separation is implemented using PostgreSQL's row-level security mechanism, which ensures that queries executed by specific tenants are restricted to their own records, providing complete data isolation.
@@ -178,7 +178,7 @@ print(f"User created in sub-account: {user_response['token']}")
 
 - **Complete Data Isolation**: Each tenant has its own isolated data namespace
 - **Independent Administration**: Tenant admin tokens provide full control within the tenant
-- **Scalability**: Supports unlimited tenants with PostgreSQL row-level security
+- **Scalability**: Supports unlimited tenants with PostgreSQL row-level security (requires PostgreSQL, not available with MySQL)
 - **Security**: Built-in tenant separation at the database level
 - **Compliance**: Meets data residency and isolation requirements
 
@@ -376,7 +376,7 @@ console.log("Group admin token:", adminToken);
 - Each sub-account requires **independent administrative control**
 - You're building a **multi-tenant SaaS application**
 - You need to meet **strict data residency requirements**
-- You want **database-level isolation** for security
+- You want **database-level isolation** for security (requires PostgreSQL, not available with MySQL)
 
 ### Use Groups Approach When:
 
@@ -441,7 +441,7 @@ const resellerTenant = await rootClient.tenantCreate({
 
 ### Multi-tenancy Security
 
-- **Row-Level Security**: PostgreSQL RLS ensures tenant data isolation
+- **Row-Level Security**: PostgreSQL RLS ensures tenant data isolation (requires PostgreSQL, not available with MySQL)
 - **Token-Based Access**: Tenant admin tokens are scoped to their tenant
 - **Audit Logging**: All tenant operations are logged separately
 - **Encryption**: Each tenant's data is encrypted independently

@@ -27,7 +27,7 @@ Databunker Pro extracts emails, phone numbers, and login names from user records
 
 ### Backend database connectivity
 
-By default, **Databunker Pro** connects with PostgreSQL through a **secure SSL channel**.
+**Databunker Pro** supports both **PostgreSQL** and **MySQL** as backend databases, connecting through a **secure SSL channel**. Note: Multi-tenancy is only supported with PostgreSQL and is not available when using MySQL.
 
 ### FIPS compliance
 
@@ -68,7 +68,7 @@ Databunker employs encrypted JSON objects for storing user profiles. During upda
 
 ### Multi-tenancy
 
-Databunker Pro implements <a href="/databunker-pro-docs/multi-tenancy/">multi-tenancy</a> using PostgreSQL’s row-level security mechanism. Queries executed by specific tenants are restricted to their own records.
+Databunker Pro implements <a href="/databunker-pro-docs/multi-tenancy/">multi-tenancy</a> using PostgreSQL's row-level security mechanism. Queries executed by specific tenants are restricted to their own records. **Note:** Multi-tenancy requires PostgreSQL and is not supported with MySQL.
 
 ### Token-based API Access
 
@@ -82,7 +82,7 @@ Databunker Pro is distributed as Docker container, which can be easily deployed 
 
 ### Stateless application server
 
-Databunker Pro is a stateless application server, enabling multiple instances to run concurrently. The primary bottleneck is the backend database. To address this, Databunker Pro integrates with AWS Aurora PostgreSQL Auto-Scaling databases.
+Databunker Pro is a stateless application server, enabling multiple instances to run concurrently. The primary bottleneck is the backend database. To address this, Databunker Pro integrates with AWS Aurora PostgreSQL Auto-Scaling databases. Both PostgreSQL and MySQL are supported as backend databases.
 
 ### Scalability in Kubernetes
 
