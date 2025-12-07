@@ -65,7 +65,7 @@
               "source": "pro/api/openapi.yml",
               "directory": "pro/api"
             },
-            "pages": [ "overview" ]
+            "pages": [ "pro/api/overview" ]
           }
         ]
       },
