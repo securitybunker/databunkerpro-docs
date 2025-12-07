@@ -63,9 +63,9 @@
             "tab": "API Reference",
             "openapi": {
               "source": "pro/api/openapi.yml",
-              "directory": "pro/api",
-              "pages": [ "overview" ]
-            }
+              "directory": "pro/api"
+            },
+            "pages": [ "overview" ]
           }
         ]
       },
