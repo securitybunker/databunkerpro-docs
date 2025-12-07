@@ -60,7 +60,7 @@
             ]
           },
           {
-            "tab": "Reference",
+            "tab": "API Reference",
             "openapi": {
               "source": "pro/api/openapi.yml",
               "directory": "pro/api"
