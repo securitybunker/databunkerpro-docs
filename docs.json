@@ -22,6 +22,7 @@
                   "pro/get-started/overview",
                   "pro/get-started/pii-vault",
                   "pro/get-started/architecture",
+                  "pro/get-started/security-overview",
                   "pro/get-started/faq"
                 ]
               },
@@ -36,7 +37,6 @@
               {
                 "group": "Administration",
                 "pages": [
-                  "pro/administration/security-overview",
                   "pro/administration/master-key",
                   "pro/administration/key-rotation",
                   "pro/administration/shamir-keys",
