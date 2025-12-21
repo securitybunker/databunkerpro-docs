@@ -50,6 +50,7 @@
                   "pro/concepts/tokenization",
                   "pro/concepts/fuzzy-search",
                   "pro/concepts/record-versioning",
+                  "pro/concepts/select-security",
                   "pro/concepts/sub-accounts"
                 ]
               },

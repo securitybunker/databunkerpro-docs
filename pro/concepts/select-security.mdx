@@ -1,0 +1,93 @@
+---
+title: Select security
+---
+
+## Secure bulk retrieval challenge
+The primary security challenge with both SQL and NoSQL databases is the risk of secure bulk retrieval (or record-dumping) queries, such as a "SELECT *" request.
+
+When combined with SQL injection or GraphQL injection vulnerabilities, attackers can exploit these queries to dump entire database in a matter of seconds. A malicious actor can access your sensitive records even if a database encryption solution is implemented.
+
+To address this threat, the original version of Databunker Pro was designed to retrieve user records only when specific user details were provided. This approach significantly limited attackers' ability to enumerate users stored in Databunker. Even if an attacker managed to obtain a Databunker Pro access token, they would still need to provide specific details like the user's email, phone number, or UUID to access any information. From a security perspective, this design was robust and highly effective.
+
+## The Usability Dilemma
+Despite the strong security model, we began losing business. Companies provided feedback that they needed a way to list all users as part of their application's admin interface.
+
+Initially, we firmly opposed introducing any API that allowed bulk user retrieval, as it conflicted with our strict security principles.
+
+However, this resistance came at a cost. While our security model remained robust, our product's usability suffered, which negatively impacted our business.
+
+We realized we needed a solution that could balance these conflicting requirements: maintaining high security while providing admins with essential functionality.
+
+## Iteration 1: Adding Basic Controls for Bulk Access
+
+Our initial attempt to balance usability and security introduced a two-step approach:
+
+1. **Configuration Setting:** Admins could enable or disable the ability to dump user records entirely.
+1. **POST Request Requirement:** A bulk data dump required a POST request, ensuring the action couldn't be triggered by a simple GET request.
+
+This solution addressed some concerns but still left room for improvement.
+
+## Iteration 2: Secure Unlock Mechanism
+Over time, we developed a more secure solution:
+
+1. **Unlock Request:** A special API unlock request must be submited, specifying whether they want to unlock all users or a specific group of users.
+1. **Temporary Token:** The unlock request generates a temporary token with a short expiration window (e.g., a few minutes).
+1. **Token Validation:** During the token's validity period, user records can only be dumped if the token is included in the API request.
+
+**This solution ensured that bulk data access required explicit admin intent, was time-restricted, and could not be abused by malicious actors.**
+
+The bulk unlock UUID is designed with strict time constraints for enhanced security:
+- It expires automatically after a few seconds
+- It must be included when retrieving records for any group of users
+- A new UUID must be requested for subsequent bulk operations
+
+## Iteration 3: Fine-Grained Access Control with Policy Engine
+Our latest iteration introduces a powerful policy engine that provides granular control over bulk operations and user listing capabilities. This enhancement allows organizations to:
+
+1. **Control Bulk Operations Access:** Define exactly who has the right to perform bulk unlock API requests
+2. **Group-Specific Access:** Restrict user listing to specific groups or departments
+3. **Field-Level Security:** Control which user fields are visible in bulk operations
+4. **Role-Based Controls:** Implement role-based access patterns for different admin types
+
+Here's an example policy that demonstrates these capabilities:
+
+```json
+{
+    "policyname": "ManagerAccess",
+    "policy": {
+        "Effect": "Allow",
+        "Principal": { "Role": "manager" },
+        "Action": ["UserGet", "BulkListGroupUsers"],
+        "Resource": [
+            "${target_group_members:role/team-member}.profile.name",
+            "${target_group_members:role/team-member}.profile.phone",
+            "${target_group_members:role/team-member}.group"
+        ],
+        "Condition": {
+            "StringEquals": {
+                "${user_group_id}": "${target_group_id}"
+            }
+        }
+    }
+}
+```
+
+This policy demonstrates several key security features:
+
+1. **Limited Actions:** The manager role can only perform specific actions (`UserGet` and `BulkListGroupUsers`)
+2. **Field Restrictions:** Access is limited to specific fields (name, phone, group)
+3. **Group Isolation:** Managers can only access members of their own group
+4. **Automatic Data Masking:** Other sensitive fields are automatically masked
+
+By implementing these policies, organizations can:
+- Allow HR managers to list only their department members
+- Restrict sensitive field access in bulk operations
+- Implement hierarchical access patterns
+- Maintain audit trails of all bulk access operations
+
+This policy-based approach provides the flexibility needed for complex organizational structures while maintaining strict security controls. It represents a significant evolution from our previous iterations, offering both the security we're known for and the granular control our customers need.
+
+## Conclusion
+By evolving our approach from basic controls to a secure unlock mechanism, we successfully balanced security and usability. The unlock-and-token method allowed us to meet customer requirements for admin functionality while maintaining the strong security principles that Databunker Pro is known for.
+
+This iterative process highlights how addressing user feedback and evolving product features can strengthen both usability and trust without compromising security.
