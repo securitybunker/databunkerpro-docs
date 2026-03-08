@@ -4,6 +4,13 @@ title: API Overview
 
 Databunker Pro is a privacy-compliant user data vault and tokenization engine that provides secure storage and management of user data with built-in privacy controls, consent management, and audit capabilities.
 
+## API Documents for AI Assistants
+
+Feed these directly into your LLM or AI coding assistant for accurate, context-aware help when building integrations:
+
+- [OpenAPI Specification](https://github.com/securitybunker/databunkerpro-docs/blob/main/pro/api/openapi.yml)
+- [Full documentation (LLM-friendly)](https://docs.databunker.org/llms-full.txt)
+
 ## Key Features
 - **User Management**: Create, update, and manage user profiles with privacy controls
 - **Consent Management**: Handle legal basis and user agreements for GDPR/DPDP compliance
@@ -41,19 +48,3 @@ curl -X POST http://localhost:3000/v2/UserCreate \
 
 ## Base URL
 The API is available at `/v2/` endpoint with all requests using POST method.
-
-## Using this API with AI Assistants
-
-You can feed the full Databunker Pro API specification directly into your LLM or AI coding assistant to get accurate, context-aware help when building integrations.
-
-**OpenAPI specification (machine-readable):**
-```
-https://docs.databunker.org/pro/api/openapi.yml
-```
-
-**Full documentation in LLM-friendly format:**
-```
-https://docs.databunker.org/llms-full.txt
-```
-
-Copy either URL and paste it into ChatGPT, Claude, Cursor, or any other AI tool that accepts URL or file context. The OpenAPI spec is the most precise source for endpoint details, request/response schemas, and authentication requirements.
