@@ -5,7 +5,7 @@ info:
     Databunker Pro is a privacy-compliant user data vault and tokenization engine that provides secure storage and management of user data with built-in privacy controls, consent management, and audit capabilities.
 
     ## Key Features
-    - **User Management**: Create, update, and manage user profiles with privacy controls
+    - **User Tokenization**: Create, update, and manage user profiles with privacy controls
     - **Consent Management**: Handle legal basis and user agreements for GDPR/DPDP compliance
     - **Token Management**: Secure tokenization of sensitive data like credit cards
     - **Audit Trail**: Complete audit logging of all data access and modifications
@@ -64,7 +64,7 @@ paths:
     post:
       summary: Create a new user
       description: Creates a new user with profile information and optional group/role assignment
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -117,7 +117,7 @@ paths:
     post:
       summary: Get user information
       description: Retrieves user information by login, token, or other identifiers
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -178,7 +178,7 @@ paths:
     post:
       summary: Update user profile
       description: Updates user profile information
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -217,7 +217,7 @@ paths:
     post:
       summary: Patch user profile using JSON Patch
       description: Updates user profile using JSON Patch operations (RFC 6902)
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -267,7 +267,7 @@ paths:
     post:
       summary: Delete user
       description: Deletes a user and their associated data
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -302,7 +302,7 @@ paths:
     post:
       summary: Search users
       description: Searches for users using fuzzy matching
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -368,7 +368,7 @@ paths:
     post:
       summary: List user versions
       description: Lists all versions of a user's profile
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -417,7 +417,7 @@ paths:
     post:
       summary: Request user deletion
       description: Creates a deletion request for a user (requires approval)
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -455,7 +455,7 @@ paths:
     post:
       summary: Get user request
       description: Retrieves information about a specific user request
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -489,7 +489,7 @@ paths:
     post:
       summary: Cancel user request
       description: Cancels a pending user request
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -523,7 +523,7 @@ paths:
     post:
       summary: Approve user request
       description: Approves a pending user request
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -557,7 +557,7 @@ paths:
     post:
       summary: List user requests
       description: Lists all requests for a specific user
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -611,7 +611,7 @@ paths:
     post:
       summary: Request user update
       description: Creates an update request for a user (requires approval)
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -653,7 +653,7 @@ paths:
     post:
       summary: Request user patch
       description: Creates a patch request for a user (requires approval)
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -1143,7 +1143,7 @@ paths:
     post:
       summary: Create multiple users in bulk
       description: Creates multiple users with their profiles and group information
-      tags: [User Management]
+      tags: [User Tokenization]
       requestBody:
         required: true
         content:
@@ -4331,7 +4331,7 @@ components:
           description: Detailed information about the event
 
 tags:
-  - name: User Management
+  - name: User Tokenization
     description: Operations for creating, reading, updating, and deleting users
   - name: App Data Management
     description: Operations for managing application-specific user data
