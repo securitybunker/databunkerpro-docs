@@ -62,8 +62,8 @@ paths:
   # ========================================
   /v2/UserCreate:
     post:
-      summary: Create a new user
-      description: Creates a new user with profile information and optional group/role assignment
+      summary: Create a new user token
+      description: Creates a new user token with profile information and optional group/role assignment
       tags: [User Tokenization]
       requestBody:
         required: true
