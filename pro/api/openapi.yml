@@ -2676,7 +2676,7 @@ paths:
     post:
       summary: Create token for sensitive data
       description: Creates a token for sensitive data like credit card numbers
-      tags: [Tokenization Management]
+      tags: [Format Preserving Tokenization]
       requestBody:
         required: true
         content:
@@ -2726,7 +2726,7 @@ paths:
     post:
       summary: Get token data
       description: Retrieves the original data for a given token
-      tags: [Tokenization Management]
+      tags: [Format Preserving Tokenization]
       requestBody:
         required: true
         content:
@@ -2760,7 +2760,7 @@ paths:
     post:
       summary: Delete token
       description: Deletes a token and its associated data
-      tags: [Tokenization Management]
+      tags: [Format Preserving Tokenization]
       requestBody:
         required: true
         content:
@@ -2791,7 +2791,7 @@ paths:
     post:
       summary: Create multiple tokens in bulk
       description: Creates multiple tokens for sensitive data
-      tags: [Tokenization Management]
+      tags: [Format Preserving Tokenization]
       requestBody:
         required: true
         content:
@@ -4343,7 +4343,7 @@ tags:
     description: Operations for managing data processing activities
   - name: Connector Management
     description: Operations for managing external data connectors
-  - name: Tokenization Management
+  - name: Format Preserving Tokenization
     description: Operations for tokenizing sensitive data
   - name: Group Management
     description: Operations for managing user groups
