@@ -62,6 +62,12 @@
           },
           {
             "tab": "API Reference",
+            "groups": [
+              {
+                "group": "Overview",
+                "pages": ["pro/api/overview"]
+              }
+            ],
             "openapi": {
               "source": "pro/api/openapi.yml",
               "directory": "pro/api"
