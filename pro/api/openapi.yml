@@ -301,7 +301,10 @@ paths:
   /v2/UserSearch:
     post:
       summary: Search users
-      description: Searches for users using fuzzy matching
+      description: |
+        Searches for users using fuzzy matching. The search mode is auto-detected from the `identity` value:
+        - If `identity` contains `@`, it is treated as an email search
+        - Otherwise it searches across login, phone, and custom fields
       tags: [User Tokenization]
       requestBody:
         required: true
@@ -309,15 +312,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [mode, identity, unlockuuid]
+              required: [identity, unlockuuid]
               properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
                 identity:
                   type: string
-                  description: User identifier to search for
+                  description: User identifier to search for (email, login, phone, or custom value; mode is auto-detected)
                 unlockuuid:
                   type: string
                   description: UUID from bulk list unlock for search authorization
@@ -4217,6 +4216,124 @@ paths:
                   report:
                     type: object
                     description: User report data
+
+  /v2/SystemGetUserProfiles:
+    post:
+      summary: Get user profiles across all tenants
+      description: |
+        Retrieves all profiles for a user identified by email, phone, login, or custom field across all tenants.
+        Only accessible by the main tenant admin (tenantID=1). The `token` mode is not supported.
+        Requires a bulk list unlock UUID obtained from `BulkListUnlock`.
+      tags: [System Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, unlockuuid]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, email, phone, custom]
+                  description: Mode of user identification (token mode is not supported)
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                unlockuuid:
+                  type: string
+                  description: UUID from bulk list unlock for authorization
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: User profiles retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  total:
+                    type: integer
+                    description: Total number of profiles found across all tenants
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                          description: User's unique token within the tenant
+                        profile:
+                          type: object
+                          description: User profile information
+                        tenantid:
+                          type: integer
+                          description: ID of the tenant this profile belongs to
+                        tenantname:
+                          type: string
+                          description: Name of the tenant this profile belongs to
+
+  /v2/SystemSearchUserProfiles:
+    post:
+      summary: Search user profiles across all tenants
+      description: |
+        Fuzzy-searches for user profiles across all tenants by identity.
+        The search mode is auto-detected from the `identity` value:
+        - If `identity` contains `@`, it is treated as an email search
+        - Otherwise it searches across login, phone, and custom fields
+        Only accessible by the main tenant admin (tenantID=1).
+        Requires a bulk list unlock UUID obtained from `BulkListUnlock`.
+      tags: [System Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identity, unlockuuid]
+              properties:
+                identity:
+                  type: string
+                  description: User identifier to search for (email, login, phone, or custom value; mode is auto-detected)
+                unlockuuid:
+                  type: string
+                  description: UUID from bulk list unlock for authorization
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: User profiles found successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                          description: User's unique token within the tenant
+                        profile:
+                          type: object
+                          description: User profile information
+                        tenantid:
+                          type: integer
+                          description: ID of the tenant this profile belongs to
+                        tenantname:
+                          type: string
+                          description: Name of the tenant this profile belongs to
 
   /v2/SystemGetUserHTMLReport:
     post:
