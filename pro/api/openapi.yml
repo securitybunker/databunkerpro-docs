@@ -4335,6 +4335,126 @@ paths:
                           type: string
                           description: Name of the tenant this profile belongs to
 
+  /v2/SystemDeleteUserProfiles:
+    post:
+      summary: Delete user profiles across all tenants
+      description: |
+        Deletes all profiles for a user identified by email, phone, login, custom field, or token across all tenants.
+        An optional `tenantid` or `tenantname` parameter can restrict deletion to a single tenant.
+        The `token` mode is only allowed when `tenantid` or `tenantname` is specified.
+        Only accessible by the main tenant admin (tenantID=1).
+        Requires a bulk list unlock UUID obtained from `BulkListUnlock`.
+        Deleted records are preserved in version history and can be restored with `SystemRestoreUserProfile`.
+      tags: [System Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, unlockuuid]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, email, phone, custom, token]
+                  description: Mode of user identification. The `token` mode is only allowed when `tenantid` or `tenantname` is also specified.
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                unlockuuid:
+                  type: string
+                  description: UUID from bulk list unlock for authorization
+                tenantid:
+                  type: integer
+                  description: Optional tenant ID to restrict deletion to a single tenant
+                tenantname:
+                  type: string
+                  description: Optional tenant name to restrict deletion to a single tenant
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: User profiles deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  total:
+                    type: integer
+                    description: Total number of profiles deleted across tenants
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                          description: User's unique token within the tenant
+                        tenantid:
+                          type: integer
+                          description: ID of the tenant the profile was deleted from
+                        tenantname:
+                          type: string
+                          description: Name of the tenant the profile was deleted from
+
+  /v2/SystemRestoreUserProfile:
+    post:
+      summary: Restore a deleted user profile
+      description: |
+        Restores a previously deleted user profile for a specific tenant from version history.
+        The caller must provide the user `token` and either `tenantid` or `tenantname`.
+        Only accessible by the main tenant admin (tenantID=1).
+        Requires a bulk list unlock UUID obtained from `BulkListUnlock`.
+      tags: [System Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, unlockuuid]
+              properties:
+                token:
+                  type: string
+                  description: User's unique token (UUID) within the tenant
+                unlockuuid:
+                  type: string
+                  description: UUID from bulk list unlock for authorization
+                tenantid:
+                  type: integer
+                  description: Tenant ID where the user profile should be restored
+                tenantname:
+                  type: string
+                  description: Tenant name where the user profile should be restored (alternative to tenantid)
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: User profile restored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  result:
+                    type: string
+                    example: "restored"
+                  token:
+                    type: string
+                    description: User's unique token
+                  profile:
+                    type: object
+                    description: Restored user profile data
+
   /v2/SystemGetUserHTMLReport:
     post:
       summary: Get user HTML report
