@@ -29,8 +29,8 @@
               {
                 "group": "Installation",
                 "pages": [
-                  "pro/installation/kubernetes-helm",
                   "pro/installation/docker-compose",
+                  "pro/installation/kubernetes-helm",
                   "pro/installation/generate-admin-credentials"
                 ]
               },
