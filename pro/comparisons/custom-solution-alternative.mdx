@@ -1,0 +1,218 @@
+---
+title: Custom PII Vault vs Databunker Pro — Build or Buy?
+sidebarTitle: Custom PII Vault vs Databunker Pro
+description: What it actually takes to build a PII vault from scratch — and why most teams underestimate the effort by 10x.
+---
+
+When teams first encounter the PII storage problem, the instinct is often: "We'll build it ourselves. It's just encryption and a database." That's how it starts. Then come the edge cases, the compliance requirements, and the features you didn't know you needed until an auditor asked for them.
+
+**Databunker Pro gives you a production-ready PII vault in a day.** Building the equivalent yourself takes months of engineering — and the ongoing maintenance never stops.
+
+## What looks simple at first
+
+A basic encrypted user store seems straightforward:
+
+```python
+import json
+from cryptography.fernet import Fernet
+
+key = Fernet.generate_key()
+cipher = Fernet(key)
+
+def store_user(db, user_data):
+    encrypted = cipher.encrypt(json.dumps(user_data).encode())
+    token = str(uuid.uuid4())
+    db.execute("INSERT INTO users (token, data) VALUES (%s, %s)", (token, encrypted))
+    return token
+
+def get_user(db, token):
+    row = db.execute("SELECT data FROM users WHERE token = %s", (token,)).fetchone()
+    return json.loads(cipher.decrypt(row[0]))
+```
+
+That's maybe 20 lines. Ship it. Done.
+
+Except it's not done. Here's what you'll need to build next.
+
+## What you'll actually need to build
+
+### 1. Key management
+
+Your encryption key is a single point of failure. You need:
+
+- A wrapping key to protect the master key
+- Key rotation without re-encrypting every record
+- A recovery mechanism if the key is lost (Shamir's secret sharing or similar)
+- Secure key storage that isn't just an environment variable
+
+Databunker Pro handles this with a master key, wrapping key rotation via API, and Shamir key sharing for recovery — built in from day one.
+
+### 2. Searchable encrypted records
+
+Your first implementation can look up users by token. But then someone needs to find a user by email. Or phone number. Now you need:
+
+- A secure hash-based search index
+- Indexes that don't leak plaintext but still allow lookups
+- Support for multiple lookup fields (email, phone, login, custom fields)
+
+```bash
+# Databunker Pro — look up by email, phone, or token
+curl -X POST https://your-databunker/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -d '{"mode": "email", "identity": "john@example.com"}'
+
+curl -X POST https://your-databunker/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -d '{"mode": "phone", "identity": "+1-555-123-4567"}'
+```
+
+Building a secure search index that doesn't leak data is a research-level problem. Databunker Pro uses hash-based lookups that enable search without exposing plaintext.
+
+### 3. Tokenization engine
+
+Beyond user profiles, you need to tokenize individual fields — credit card numbers, SSNs, health identifiers. And the tokens need to:
+
+- Preserve format for downstream systems (Luhn-valid card numbers, same-length strings)
+- Support deduplication (same input produces same token)
+- Have configurable expiration
+- Handle bulk operations at scale
+
+```bash
+# Databunker Pro — format-preserving credit card tokenization
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -d '{
+    "record": "4532015112830366",
+    "type": "creditcard",
+    "expiration": "30d",
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "tokenuuid": "550e8400-e29b-41d4-a716-446655440000",
+  "tokenbase": "4024007186539112"
+}
+```
+
+Building a format-preserving tokenization engine that passes Luhn validation and handles millions of records is a significant engineering effort on its own.
+
+### 4. Consent management
+
+GDPR Article 6 and the DPDP Act require you to record the legal basis for processing each person's data. You need:
+
+- A consent store linked to each user record
+- Support for multiple consent types (marketing, analytics, data sharing)
+- Consent withdrawal tracking
+- Timestamped audit trail of consent changes
+
+Most custom implementations skip this entirely — until the first compliance audit.
+
+### 5. Audit trail
+
+Every access, modification, and deletion of PII needs to be logged. Not application logs — a tamper-resistant audit trail that:
+
+- Records who accessed what data, when, and why
+- Encrypts PII within the audit events themselves
+- Is queryable by a DPO or auditor
+- Can't be modified or deleted by application code
+
+### 6. Data subject requests
+
+GDPR and DPDP Act give users the right to access, correct, and delete their data. You need:
+
+- **Right to access** — return all data you hold for a specific person
+- **Right to erasure** — delete everything for one user across all stores
+- **Right to portability** — export a user's data in a machine-readable format
+- **Right to rectification** — update a user's data across all linked records
+
+```javascript
+// Databunker Pro — full erasure in one call
+await axios.post('https://your-databunker/v2/UserDelete', {
+  mode: 'token',
+  identity: userToken
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+```
+
+In a custom solution, you need to track every table, every cache, every log file, and every downstream system that might contain a copy of a user's PII.
+
+### 7. Record versioning and expiration
+
+Regulators may ask: "What data did you hold for this user six months ago?" You need:
+
+- Version history for every user record
+- Ability to retrieve a specific version
+- Automatic expiration (sliding and absolute TTLs) for data minimization
+- Proof that expired records were actually deleted
+
+### 8. Multi-tenancy
+
+If you serve multiple customers or operate in multiple regions, you need tenant isolation:
+
+- Data from tenant A must never be visible to tenant B
+- Queries must be scoped by tenant at the database level (not just application logic)
+- Each tenant may need separate encryption keys
+
+Databunker Pro implements this with PostgreSQL row-level security — true database-level isolation, not application-layer filtering that a bug can bypass.
+
+### 9. Access control
+
+Different services and team members need different levels of access:
+
+- Role-based policies (admin, read-only, tokenize-only)
+- API token management with scoped permissions
+- Rate limiting and abuse prevention
+
+### 10. DPO portal
+
+Your Data Protection Officer needs a UI to handle data subject requests, review audit logs, and demonstrate compliance. Building an admin portal is another project entirely.
+
+## The real cost comparison
+
+| | Custom solution | Databunker Pro |
+|---|---|---|
+| **Initial build** | 3-6 months of senior engineering | Deploy in a day |
+| **Encryption + key management** | Build from scratch | Built-in (AES-256, Shamir, key rotation) |
+| **Searchable encrypted records** | Research-level problem | Built-in hash-based indexes |
+| **Format-preserving tokenization** | Significant engineering effort | One API call |
+| **Consent management** | Usually skipped, then rushed before audit | Built-in |
+| **Audit trail** | Custom implementation | Built-in, compliance-ready |
+| **Data subject requests** | Manual process across all data stores | Single API calls |
+| **Record versioning** | Custom implementation | Built-in |
+| **Auto-expiration** | Custom cron jobs and cleanup logic | Built-in TTLs |
+| **Multi-tenancy** | Application-layer filtering (bug-prone) | PostgreSQL row-level security |
+| **DPO portal** | Separate project | Built-in |
+| **Ongoing maintenance** | Your team, indefinitely | Managed upgrades |
+| **Compliance confidence** | Hope it holds up in an audit | Designed for GDPR, DPDP Act, HIPAA, SOC 2 |
+
+## The hidden costs of building your own
+
+Beyond the initial build, a custom PII vault creates ongoing costs that teams rarely budget for:
+
+- **Security reviews** — every change to the encryption layer needs a security review
+- **Penetration testing** — custom crypto implementations are high-value targets
+- **Compliance updates** — new regulations (DPDP Act, state privacy laws) require new features
+- **Key rotation incidents** — when something goes wrong with key management at 2 AM
+- **Staff turnover** — the engineer who built the vault leaves, and nobody fully understands the code
+- **Audit preparation** — weeks of work assembling evidence for each compliance audit
+
+## When a custom solution makes sense
+
+Building your own PII vault might be justified if:
+
+- You have unique requirements that no existing solution can meet
+- You have a dedicated security engineering team with cryptography expertise
+- You're willing to maintain the solution for years, including compliance updates
+- Your scale requires a fundamentally different architecture
+
+For most teams, those conditions don't apply. The PII vault is not where you want to differentiate — it's plumbing that needs to work correctly and compliantly so you can focus on your actual product.
+
+## The bottom line
+
+The gap between a basic encrypted database and a production-ready PII vault is enormous. It includes key management, searchable encryption, tokenization, consent tracking, audit trails, data subject request handling, record versioning, multi-tenancy, access control, and a DPO portal. Teams that start building their own typically discover this gap six months in — after the first compliance audit, or the first data subject request they can't fulfill.
+
+Databunker Pro gives you all of this out of the box. Deploy it in a day, and spend your engineering time on the product your customers actually pay for.

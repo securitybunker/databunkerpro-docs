@@ -55,6 +55,14 @@
                 ]
               },
               {
+                "group": "Comparisons",
+                "pages": [
+                  "pro/comparisons/aws-cognito-alternative",
+                  "pro/comparisons/hashicorp-vault-alternative",
+                  "pro/comparisons/custom-solution-alternative"
+                ]
+              },
+              {
                 "group": "Developer tools",
                 "pages": ["pro/developer-tools/overview"]
               }

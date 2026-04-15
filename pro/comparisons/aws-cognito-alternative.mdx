@@ -1,0 +1,157 @@
+---
+title: AWS Cognito vs Databunker Pro — PII Vault & Tokenization
+sidebarTitle: AWS Cognito vs Databunker Pro
+description: Databunker Pro is a secure replacement for AWS Cognito that gives you PII vaulting, tokenization, and compliance on top of auth you can build in minutes.
+---
+
+AWS Cognito is an authentication service — sign-up, sign-in, SSO, and access tokens. That used to be hard to build. It isn't anymore. With modern frameworks and AI-assisted development, you can implement email/password auth, OAuth, Google/Microsoft SSO, and session management in a matter of minutes — not months.
+
+**Databunker Pro is a secure, self-hosted replacement for Cognito** that makes the auth part trivial and gives you everything Cognito can't: a PII vault, format-preserving tokenization, consent management, a DPO portal, and built-in compliance with GDPR, DPDP Act, HIPAA, and SOC 2.
+
+## Authentication is no longer a hard problem
+
+Cognito was built when implementing auth was genuinely complex. Today, a developer can scaffold a complete authentication system — email/password registration, Google and Microsoft SSO, JWT sessions, password reset flows — in an afternoon using AI coding assistants and well-documented libraries.
+
+That's exactly how production systems are built today. The auth layer is glue code. The hard problems are elsewhere: **how do you encrypt PII at rest, tokenize sensitive fields, track consent, handle data subject requests, and prove compliance to an auditor?**
+
+Cognito doesn't solve any of those. Databunker Pro does.
+
+## What you get with Databunker Pro that Cognito can't offer
+
+Databunker Pro replaces Cognito's user directory with a **privacy-first PII vault** and adds an entire compliance layer on top:
+
+- **PII Vault** — AES-256 per-record encryption with secure hash-based search indexes
+- **Tokenization engine** — UUID and format-preserving tokens (Luhn-valid credit card tokens, integers, timestamps)
+- **Consent management** — track legal basis, user agreements, and processing operations for GDPR/DPDP Act
+- **DPO portal** — built-in interface for Data Protection Officers to handle access, erasure, and portability requests
+- **Audit trail** — every API call logged with encrypted PII context
+- **Multi-tenancy** — native row-level isolation in PostgreSQL
+- **Record versioning** — full version history for every user record
+- **Auto-expiration** — sliding and absolute TTLs for automatic data deletion
+- **Fuzzy search** — search encrypted records without decrypting the database
+- **Shamir key sharing** — master key split across multiple custodians for recovery
+- **Self-hosted** — deploy on any cloud, on-premises, or in your customer's region
+
+## Comparison table
+
+| Capability | Databunker Pro | AWS Cognito |
+|---|---|---|
+| **Primary purpose** | PII vault, tokenization, consent & DPO portal | Authentication & user directory |
+| **Deployment** | Self-hosted (Docker, Kubernetes), any cloud or on-prem | AWS only |
+| **PII encryption** | AES-256 per-record, FIPS 140-2 compliant | AWS-managed KMS (shared) |
+| **Tokenization** | UUID + format-preserving tokens | None |
+| **Data minimization** | Built-in — apps store only tokens | Not supported |
+| **Consent management** | Built-in legal basis & agreement tracking | None |
+| **DPO portal** | Built-in | None |
+| **Audit trail** | Field-level, every API call | CloudTrail (API-level only) |
+| **Format-preserving tokenization** | Credit cards (Luhn-valid), integers, timestamps | None |
+| **Multi-tenancy** | Native row-level isolation (PostgreSQL) | Separate user pools |
+| **Record versioning** | Built-in | None |
+| **Right to erasure (GDPR Art. 17)** | Single API call | Manual cleanup |
+| **DPDP Act / GDPR / HIPAA / SOC 2** | Built-in compliance controls | Shared responsibility model |
+| **Vendor lock-in** | None | Tied to AWS |
+| **Fuzzy search on encrypted data** | Supported | None |
+| **Shamir key sharing** | Master key split for recovery | AWS KMS only |
+| **Data residency** | Any region, on-premises, customer-hosted | AWS regions only |
+| **Bulk operations** | Bulk tokenization & export via API | None |
+| **Record auto-expiration** | Sliding and absolute TTLs | Refresh token TTL only |
+
+## Code examples
+
+### How Cognito stores PII (the problem)
+
+With Cognito, PII lives inside AWS as user attributes. It's accessible via API, visible in the AWS console, included in exports, and you have no control over per-record encryption:
+
+```javascript
+// AWS Cognito — PII stored as user attributes
+const cognito = new AWS.CognitoIdentityServiceProvider();
+
+await cognito.adminUpdateUserAttributes({
+  UserPoolId: 'us-east-1_XXXXX',
+  Username: 'john@example.com',
+  UserAttributes: [
+    { Name: 'custom:ssn', Value: '123-45-6789' },      // PII in Cognito
+    { Name: 'custom:phone', Value: '+1-555-123-4567' }, // PII in Cognito
+    { Name: 'address', Value: '123 Main St' }            // PII in Cognito
+  ]
+}).promise();
+// PII is now in AWS — in their console, their backups, their logs
+```
+
+### How Databunker Pro stores PII (the solution)
+
+With Databunker Pro, your application database never contains PII. You store a safe UUID token and retrieve the real data only when needed:
+
+```javascript
+const axios = require('axios');
+
+// 1. Store PII in Databunker Pro — get back a safe token
+const response = await axios.post('https://your-databunker/v2/UserCreate', {
+  profile: {
+    email: 'john@example.com',
+    first: 'John',
+    last: 'Doe',
+    phone: '+1-555-123-4567',
+    ssn: '123-45-6789',
+    address: '123 Main St'
+  }
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+
+const userToken = response.data.token;
+// "a21fa1d3-5e47-11ef-a729-32e05c6f6c16"
+
+// 2. Store only the token in your app database — zero PII
+await db.query(
+  'INSERT INTO users (id, databunker_token) VALUES ($1, $2)',
+  [userId, userToken]
+);
+
+// 3. Retrieve PII only when you need to display it
+const user = await axios.post('https://your-databunker/v2/UserGet', {
+  mode: 'token',
+  identity: userToken
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+
+console.log(user.data.profile.email); // "john@example.com"
+```
+
+If your database gets breached, attackers see only meaningless UUID tokens.
+
+### Format-preserving credit card tokenization
+
+This is something Cognito has no concept of. Databunker Pro can tokenize a real credit card number into a Luhn-valid fake that passes format validation in downstream systems:
+
+```bash
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -d '{
+    "record": "4532015112830366",
+    "type": "creditcard",
+    "expiration": "30d",
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "tokenuuid": "550e8400-e29b-41d4-a716-446655440000",
+  "tokenbase": "4024007186539112"
+}
+```
+
+The `tokenbase` passes Luhn checks and format validation — but maps to no real card. Your legacy systems keep working without ever seeing real card numbers.
+
+## Why not just use Cognito for auth and add Databunker later?
+
+Because you'd be paying for a managed service that does less than what you can build yourself in minutes. Cognito locks you into AWS, charges per MAU, imposes attribute limits, and gives you zero control over how PII is stored or encrypted. Meanwhile, the auth part — the only thing Cognito actually does — is the easiest piece of the puzzle to implement yourself.
+
+With Databunker Pro, you get the secure user storage layer that Cognito was never designed to be, and you build the thin auth layer on top with whatever tools your team already knows. No vendor lock-in. No per-user pricing for basic sign-in. No compliance gaps.
+
+## The bottom line
+
+Authentication is a solved problem — you can build SSO and email/password auth in minutes with modern tools. What's not solved is **PII protection, tokenization, consent management, and regulatory compliance**. That's what Databunker Pro is built for. Instead of paying AWS for a user directory that doesn't protect your data, replace it with a system that does.

@@ -1,0 +1,166 @@
+---
+title: HashiCorp Vault vs Databunker Pro — PII Storage & Compliance
+sidebarTitle: HashiCorp Vault vs Databunker Pro
+description: HashiCorp Vault manages infrastructure secrets. Databunker Pro is a PII vault purpose-built for personal data protection, tokenization, and privacy compliance.
+---
+
+HashiCorp Vault is an infrastructure secrets manager — it stores API keys, database credentials, TLS certificates, and encryption keys. It's excellent at that job. But when teams try to use it as a PII vault for personal data, they quickly hit its limits.
+
+**Databunker Pro is purpose-built for PII.** It stores, encrypts, and tokenizes user records — names, emails, SSNs, credit cards, health data — with built-in consent management, audit trails, a DPO portal, and regulatory compliance out of the box. Vault was never designed for any of that.
+
+## Vault is for infrastructure secrets, not personal data
+
+HashiCorp Vault solves a specific problem well: managing machine-to-machine secrets. It rotates database passwords, issues short-lived TLS certificates, and encrypts application data via its Transit engine. DevOps and platform teams rely on it for good reason.
+
+But PII is not an infrastructure secret. Personal data has regulatory requirements that Vault doesn't address:
+
+- **Data subject access requests** — a user asks "what data do you have on me?" Vault has no concept of a user profile or a way to retrieve all data belonging to one person.
+- **Right to erasure** — deleting all PII for one user across your system. In Vault, you'd have to track every secret path where you stored each user's data and delete them individually.
+- **Consent and legal basis tracking** — GDPR and DPDP Act require you to record why you're processing each person's data. Vault has no consent model.
+- **Data minimization** — storing only what's necessary, with automatic expiration. Vault secrets can have TTLs, but there's no concept of user record lifecycle management.
+- **Audit for compliance** — Vault logs access events, but not in a format an auditor or DPO can use to demonstrate privacy compliance.
+
+## What Databunker Pro gives you that Vault doesn't
+
+Databunker Pro is a **complete PII protection platform**, not a generic secrets store adapted for personal data:
+
+- **User-centric data model** — store complete user profiles as JSON, look them up by email, phone, login, or token
+- **Format-preserving tokenization** — Luhn-valid credit card tokens, integer tokens, timestamp tokens — not just opaque UUIDs
+- **Consent management** — track legal basis, user agreements, and processing operations for GDPR/DPDP Act
+- **DPO portal** — built-in interface for Data Protection Officers to handle access, erasure, and portability requests
+- **Record versioning** — full version history for every user record, not just current state
+- **Auto-expiration** — sliding and absolute TTLs for automatic data deletion (data minimization by design)
+- **Fuzzy search** — search encrypted PII records without decrypting the database
+- **Multi-tenancy** — native row-level isolation in PostgreSQL, not namespace-based separation
+- **Simple API** — one call to store a user, one call to retrieve, one call to delete. No policy authoring, no mount configuration, no unseal ceremony
+- **Audit trail** — every API call logged with encrypted PII context, ready for compliance review
+
+## Comparison table
+
+| Capability | Databunker Pro | HashiCorp Vault |
+|---|---|---|
+| **Primary purpose** | PII vault, tokenization & compliance | Infrastructure secrets management |
+| **Data model** | User profiles (JSON), searchable by email/phone/token | Key-value secrets, no user concept |
+| **Tokenization** | UUID + format-preserving (credit cards, integers, timestamps) | Transform engine (Enterprise only) |
+| **Format-preserving tokenization** | Built-in, Luhn-valid credit card tokens | Enterprise license required, limited formats |
+| **Consent management** | Built-in legal basis & agreement tracking | None |
+| **DPO portal** | Built-in | None |
+| **Right to erasure** | Single API call deletes all user data | Manual — find and delete each secret path |
+| **Data subject access requests** | Single API call returns full user profile | No user concept — manual aggregation |
+| **Record versioning** | Built-in version history per user | KV v2 has versioning, but no user-level grouping |
+| **Audit trail** | Field-level, compliance-ready | API-level, designed for security ops |
+| **Auto-expiration (data minimization)** | Sliding and absolute TTLs per user record | Secret TTLs, but no user lifecycle management |
+| **Fuzzy search on encrypted data** | Supported | Not available |
+| **PII encryption** | AES-256 per-record, FIPS 140-2 compliant | Transit engine encrypts data, but stores ciphertext externally |
+| **Multi-tenancy** | Native row-level isolation (PostgreSQL) | Namespaces (Enterprise only) |
+| **Operational complexity** | Docker/Kubernetes deploy, no unseal process | Unseal ceremony, policy authoring, mount configuration |
+| **DPDP Act / GDPR / HIPAA** | Built-in compliance controls | No privacy-specific compliance features |
+| **Shamir key sharing** | Master key split for recovery | Unseal keys via Shamir |
+| **Bulk operations** | Bulk tokenization & export via API | No bulk PII operations |
+| **Deployment** | Self-hosted, any infrastructure | Self-hosted or HCP Vault (HashiCorp Cloud) |
+| **License** | Commercial | BSL 1.1 (source-available, not open source) |
+
+## Code examples
+
+### Storing a user profile in Vault (the workaround)
+
+Vault has no user profile concept, so teams end up storing PII as KV secrets — manually building paths, with no search, no consent tracking, and no way to retrieve "all data for user X" without knowing every path:
+
+```bash
+# Store user PII as a KV secret — you manage the path structure
+vault kv put secret/users/john@example.com \
+  first="John" \
+  last="Doe" \
+  phone="+1-555-123-4567" \
+  ssn="123-45-6789" \
+  address="123 Main St"
+
+# Retrieve — you need to know the exact path
+vault kv get secret/users/john@example.com
+
+# Delete for GDPR erasure — hope you tracked every path
+vault kv delete secret/users/john@example.com
+# But what about secret/cards/john@example.com?
+# And secret/consents/john@example.com?
+# And secret/sessions/john@example.com?
+```
+
+No search by phone number. No consent tracking. No audit trail that a DPO can use. No auto-expiration for data minimization. You're building a PII vault from scratch on top of a secrets manager.
+
+### Storing a user profile in Databunker Pro (purpose-built)
+
+```javascript
+const axios = require('axios');
+
+// 1. Store a complete user profile — one API call
+const response = await axios.post('https://your-databunker/v2/UserCreate', {
+  profile: {
+    email: 'john@example.com',
+    first: 'John',
+    last: 'Doe',
+    phone: '+1-555-123-4567',
+    ssn: '123-45-6789',
+    address: '123 Main St'
+  }
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+
+const userToken = response.data.token;
+// "a21fa1d3-5e47-11ef-a729-32e05c6f6c16"
+
+// 2. Look up by email, phone, or token — built-in search
+const user = await axios.post('https://your-databunker/v2/UserGet', {
+  mode: 'email',
+  identity: 'john@example.com'
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+
+// 3. GDPR erasure — one call deletes everything for this user
+await axios.post('https://your-databunker/v2/UserDelete', {
+  mode: 'token',
+  identity: userToken
+}, {
+  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
+});
+```
+
+Every operation is audited. Consent is tracked. The DPO can see it all in the portal. No path management, no policy authoring, no unseal ceremony.
+
+### Tokenizing credit cards
+
+Vault's Transform engine (Enterprise only) can do format-preserving encryption, but it requires configuring roles, transformations, and templates. In Databunker Pro, it's one API call:
+
+```bash
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_API_KEY" \
+  -d '{
+    "record": "4532015112830366",
+    "type": "creditcard",
+    "expiration": "30d",
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "tokenuuid": "550e8400-e29b-41d4-a716-446655440000",
+  "tokenbase": "4024007186539112"
+}
+```
+
+A Luhn-valid token that passes format validation in downstream systems. Built-in expiration. Built-in deduplication. No Enterprise license required.
+
+## When to use each
+
+**Use HashiCorp Vault** for infrastructure secrets: API keys, database credentials, TLS certificates, encryption-as-a-service via the Transit engine. That's what it was built for, and it does it well.
+
+**Use Databunker Pro** for personal data: user profiles, credit card numbers, health records, any PII that has regulatory requirements around storage, access, consent, and deletion.
+
+They can coexist in the same stack — Vault for machine secrets, Databunker Pro for human data. But don't try to make Vault do a PII vault's job. You'll end up building half of Databunker Pro yourself on top of Vault's KV engine, without the compliance features, without the DPO portal, and without the audit trail that regulators actually need.
+
+## The bottom line
+
+HashiCorp Vault is a great secrets manager. It's not a PII vault. If you need to store personal data with encryption, tokenization, consent tracking, data subject request handling, and regulatory compliance, you need a tool that was designed for that from the ground up. That's Databunker Pro.
