@@ -44,7 +44,7 @@ You can use the following policy to grant parents access to their child's PII an
   ],
   "Condition": {
     "StringEquals": {
-      "${principal_group_id}": "${target_group_id}"
+      "${user_group_id}": "${target_group_id}"
     }
   }
 }
@@ -65,7 +65,7 @@ This policy will grant to a teacher entity access to the student's parent inform
   ],
   "Condition": {
     "ForAnyValue:ListIntersect": {
-      "${principal_group_members:role/student}": "${target_group_members:role/child}"
+      "${user_group_members:role/student}": "${target_group_members:role/child}"
     }
   }
 }
