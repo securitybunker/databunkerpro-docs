@@ -37,10 +37,18 @@ You can use the following policy to grant parents access to their child's PII an
 {
   "Effect": "Allow",
   "Principal": { "Role": "parent" },
-  "Action": ["UserGet", "UserUpdate", "BulkListGroupUsers"],
+  "Action": [
+    "UserGet",
+    "UserUpdate",
+    "BulkListGroupUsers",
+    "AgreementGet",
+    "AgreementAccept",
+    "AgreementCancel",
+    "AgreementListUserAgreements"
+  ],
   "Resource": [
     "${target_group_members:role/child}.profile",
-    "${target_group_members:role/child}.consent"
+    "${target_group_members:role/child}.agreement"
   ],
   "Condition": {
     "StringEquals": {
