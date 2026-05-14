@@ -64,7 +64,7 @@ This policy will grant to a teacher entity access to the student's parent inform
     "${target_group_members:role/parent}.profile.phone"
   ],
   "Condition": {
-    "ListIntersect": {
+    "ForAnyValue:ListIntersect": {
       "${principal_group_members:role/student}": "${target_group_members:role/child}"
     }
   }
