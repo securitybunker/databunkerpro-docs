@@ -71,6 +71,76 @@ This policy will grant to a teacher entity access to the student's parent inform
 }
 ```
 
+## Field-Level Masking in Responses
+
+When a policy grants access to a subset of a user's profile fields, Databunker Pro applies the policy at response time. The original record stays untouched in the vault; the API response is filtered for the calling principal.
+
+The masking strategy is **asymmetric by type** so that strongly-typed clients (TypeScript, Python type-hints, Java, generated SDKs) do not encounter silent type mismatches:
+
+- **String fields** that the caller is not authorized to read are replaced with the literal `"***"`. The field stays in the response so the client can detect that the field exists.
+- **All other types** (`number`, `boolean`, array, nested object) are **omitted from the response entirely** when masked. This avoids type-corruption bugs like `profile.age + 1` evaluating to `"***1"` because the engine had substituted a string for a number.
+
+### Example
+
+Suppose a `sales` user has a policy allowing only `${target_group_members:role/lead}.profile.email`. A lead's stored profile is:
+
+```json
+{
+  "login": "lead42",
+  "name":  "Jane Doe",
+  "email": "jane@example.com",
+  "phone": "+15551234567",
+  "age":   34,
+  "verified": true,
+  "tags":  ["enterprise", "warm"],
+  "address": { "city": "Springfield", "zip": "99999" }
+}
+```
+
+Calling `UserGet` with the sales user's token returns:
+
+```json
+{
+  "status":  "ok",
+  "profile": {
+    "email": "jane@example.com",
+    "login": "***",
+    "name":  "***",
+    "phone": "***"
+  }
+}
+```
+
+Notice:
+- `email` is visible because the policy granted it.
+- `login`, `name`, `phone` are strings — present in the response with value `"***"`.
+- `age` (number), `verified` (boolean), `tags` (array), `address` (object) are absent from the `profile` object entirely.
+
+### TypeScript example
+
+```typescript
+interface UserResponse {
+  status: string;
+  profile: {
+    email?:    string;
+    login?:    string;
+    name?:     string;
+    phone?:    string;
+    age?:      number;
+    verified?: boolean;
+    tags?:     string[];
+    address?:  { city: string; zip: string };
+  };
+}
+
+const r: UserResponse = await api.userGet({mode: "login", identity: "lead42"});
+
+// Safe: optional fields handled with the `?` operator.
+if (r.profile.age !== undefined) {
+  console.log("Age:", r.profile.age + 1);   // never executes when age is masked
+}
+```
+
 ## Why Choose CRBAC?
 
 1. **Compliance-Ready:** CRBAC ensures organizations meet legal and regulatory requirements, including FERPA and DPDPA.
