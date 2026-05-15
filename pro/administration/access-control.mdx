@@ -79,6 +79,67 @@ This policy will grant to a teacher entity access to the student's parent inform
 }
 ```
 
+## Passing runtime context with `request_metadata`
+
+Most Databunker Pro API endpoints accept an optional **`request_metadata`** object on the request body. The caller (application code, an API gateway, or a tokenisation proxy) uses it to pass runtime context — values like the calling environment, the purpose of the request, the originating IP address, a session identifier, a ticket number — that the access-control engine can evaluate at policy time.
+
+CRBAC `Condition` blocks can reference `request_metadata` values directly, so the same policy can grant or deny access based on **why** and **where** the request is coming from, not just **who** is making it. This is purpose-of-use enforcement.
+
+### Example: caller-supplied context
+
+```bash
+curl -X POST https://your-databunker-instance/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "jane@example.com",
+    "request_metadata": {
+      "environment": "production",
+      "purpose": "fraud-investigation",
+      "caller_ip": "10.0.12.34",
+      "session_id": "sess-7f3a",
+      "ticket_id": "INC-44218"
+    }
+  }'
+```
+
+### Example: policy that evaluates `request_metadata`
+
+This policy allows a `security-analyst` role to read full user records **only** when the request is tagged with `purpose: fraud-investigation` and originates from the production environment:
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "Role": "security-analyst" },
+  "Action": ["UserGet"],
+  "Resource": ["*.profile"],
+  "Condition": {
+    "StringEquals": {
+      "${request_metadata.purpose}":     "fraud-investigation",
+      "${request_metadata.environment}": "production"
+    }
+  }
+}
+```
+
+A request from the same role without those metadata values — or with different ones — is denied.
+
+### What to put in `request_metadata`
+
+`request_metadata` is free-form, so the keys are conventions you adopt for your deployment. Typical keys we see in production:
+
+| Key                 | Purpose                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `environment`       | `production` / `staging` / `dev` — scopes policies per environment.  |
+| `purpose`           | A business-domain purpose-of-use code (e.g., `fraud-investigation`). |
+| `caller_ip`         | Client IP — useful for IP-range conditions.                          |
+| `session_id`        | Caller session, for incident reconstruction.                         |
+| `ticket_id`         | Linking the access to a ticket / case for accountability.            |
+| `app_name`          | Calling application — useful when multiple apps share a role.        |
+
+Every value passed in `request_metadata` is recorded in the audit event for the request, so it doubles as accountability metadata even when no policy references it.
+
 ## Field-Level Masking in Responses
 
 When a policy grants access to a subset of a user's profile fields, Databunker Pro applies the policy at response time. The original record stays untouched in the vault; the API response is filtered for the calling principal.

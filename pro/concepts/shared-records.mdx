@@ -1,0 +1,111 @@
+---
+title: Shared records
+sidebarTitle: Shared records
+---
+
+**Shared records** in Databunker Pro let you create a short-lived, UUID-addressable view of a specific user's record, optionally scoped to a subset of fields and tagged with a partner reference. They are the safe way to share a user reference across systems or with an external partner — instead of handing out a long-lived token that becomes a correlation key, you hand out a time-limited UUID that resolves to exactly the fields you authorise, and expires on its own.
+
+In conversation this pattern is sometimes called **shareable identities**; in the API it is **Shared Records**.
+
+## When to use shared records
+
+Use a shared record when:
+
+- An external partner or downstream system needs to retrieve some fields from a specific user record, but should not be granted a long-lived token.
+- A cross-system reference is genuinely needed (e.g., sharing a customer between two business systems for a specific workflow), and you want the reference to expire automatically.
+- You want to avoid creating a deterministic, long-lived token that could become a correlation key across security domains.
+
+For day-to-day intra-tenant lookups, use `UserGet` directly — shared records are for the *cross-boundary* or *time-limited* case.
+
+## How they work
+
+1. The caller invokes `SharedRecordCreate`, identifying the user by `email` / `phone` / `login` / `token` / `custom` and specifying which fields to share, an expiration (`finaltime`), and optionally a `partner` tag for the audit trail.
+2. Databunker Pro returns a `recorduuid` — a fresh UUID that addresses this specific shared view.
+3. The caller distributes the `recorduuid` to the consumer (downstream system, partner, etc.).
+4. The consumer calls `SharedRecordGet` with the `recorduuid` to retrieve the data, until expiration.
+5. After expiration, the `recorduuid` no longer resolves — the share ends automatically with no clean-up step required.
+
+Every create and every retrieval generates an audit event.
+
+## API: Create a shared record
+
+```bash
+curl -X POST https://your-databunker-instance/v2/SharedRecordCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "john.doe@example.com",
+    "fields": "first,last,email",
+    "partner": "partner-acme-billing",
+    "finaltime": "7d"
+  }'
+```
+
+### Request fields
+
+| Field              | Required | Description                                                                                          |
+| ------------------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `mode`             | yes      | How the user is identified: one of `login`, `token`, `email`, `phone`, `custom`.                     |
+| `identity`         | yes      | The identifier value matching `mode` (e.g., the email address when `mode=email`).                    |
+| `fields`           | no       | Comma-separated list of profile fields to include in the share. Omit to share the full profile.      |
+| `partner`          | no       | A partner / consumer reference name. Recorded in the audit event for accountability.                 |
+| `appname`          | no       | Application name when sharing app-specific data attached to the user.                                |
+| `finaltime`        | no       | Expiration time for the share (e.g., `30m`, `24h`, `7d`). After expiration the `recorduuid` no longer resolves. |
+| `request_metadata` | no       | Runtime context for CRBAC policy evaluation (see [Access control](/pro/administration/access-control)). |
+
+### Response
+
+```json
+{
+  "status": "ok",
+  "recorduuid": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## API: Retrieve a shared record
+
+```bash
+curl -X POST https://your-databunker-instance/v2/SharedRecordGet \
+  -H "X-Bunker-Token: PARTNER_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recorduuid": "550e8400-e29b-41d4-a716-446655440000"
+  }'
+```
+
+### Request fields
+
+| Field              | Required | Description                                                                                          |
+| ------------------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `recorduuid`       | yes      | The UUID returned by `SharedRecordCreate`.                                                           |
+| `request_metadata` | no       | Runtime context for CRBAC policy evaluation.                                                         |
+
+### Response
+
+```json
+{
+  "status": "ok",
+  "data": {
+    "first": "John",
+    "last": "Doe",
+    "email": "john.doe@example.com"
+  }
+}
+```
+
+Only fields explicitly listed in the `fields` parameter at creation time are returned. The consumer never sees the full record.
+
+## Why shared records, not long-lived tokens?
+
+Reusing the same deterministic token across multiple systems and partners turns the token into a universal correlation key — if it leaks once, an attacker can correlate everything. Shared records avoid this in three ways:
+
+- **Time-limited.** A `finaltime` is mandatory in practice; expired shares cannot be reused.
+- **Field-limited.** The `fields` parameter is data-minimisation by construction — partners receive only what they need.
+- **Audit-attributable.** The `partner` tag plus the audit trail attribute every retrieval to a named consumer.
+
+## Related
+
+- [PII Vault](/pro/get-started/pii-vault) — how regular user tokens work.
+- [Sub-accounts](/pro/concepts/sub-accounts) — multi-tenant patterns that limit deterministic-token reuse across security domains.
+- [Access control](/pro/administration/access-control) — CRBAC policies and `request_metadata`.

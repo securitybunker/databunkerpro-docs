@@ -77,7 +77,17 @@ When sensitive data enters your system, Databunker Pro:
 5. **Stores encrypted data** in the secure vault
 6. **Creates hashed search indexes** for efficient lookups
 
-### 2. Secure Storage Architecture
+### 2. Uniqueness and identity resolution
+
+The hashed search indexes on `email`, `phone`, `login`, and `custom` are **unique within a tenant**. This has three practical consequences:
+
+- **Duplicates cannot coexist inside the same tenant.** A second attempt to create a user record under an existing email / phone / login / custom value is rejected at the vault level — identity uniqueness is a structural guarantee, not a discipline.
+- **Repeat identities resolve to the same token.** When the same person appears again, look them up by their indexed field and reuse the existing token; there is no risk of accidentally minting two tokens for the same underlying identity.
+- **Different tenants can hold their own record for the same person.** Tenants are cryptographically isolated boundaries (PostgreSQL row-level security), so the same email tokenised in two tenants produces two different tokens — this is the basis of the multi-tenant, multi-token pattern used for separating analytics, operational, and external-integration domains.
+
+Together, these properties mean that **tokens within a tenant are stable, deterministic join keys** — SQL queries that previously joined on `email` can join on `user_token` with no round-trip to the vault.
+
+### 3. Secure Storage Architecture
 
 ![Databunker Architecture](/pro/get-started/databunker-short-diagram.png)
 

@@ -3,11 +3,14 @@ title: Format-preserving tokenization
 sidebarTitle: Tokenization
 ---
 
-Databunker Pro features two tokenization engines. The original open-source version supported only tokenization for PII, PHI, and KYC records. The professional version adds a new secure format-preserving tokenization engine.
+Databunker Pro provides **two distinct tokenization engines**, each designed for a different job:
 
-For instance, Databunker Pro can now tokenize credit card numbers. Unlike other solutions on the market, Databunker Pro was built with the latest data privacy requirements in mind, such as data minimization.
+- **PII tokenization** (`UserCreate` / `UserGet`) — stores a complete user profile (JSON, N fields) as one encrypted record and returns a single UUID token representing the whole profile. Builds secure hashed search indexes over `email`, `phone`, `login`, and a `custom` field for efficient lookups. This is the *user-table replacement* pattern; see the [PII Vault](/pro/get-started/pii-vault) page for full detail.
+- **Format-preserving tokenization** (`TokenCreate` / `TokenGet`) — tokenizes individual sensitive values such as credit-card numbers (Luhn-valid), `uint32` / `uint64` integers, and Unix timestamps. Returns both a UUID and a format-preserving token in the same response. This is the *PCI / single-value* pattern, covered in the rest of this page.
 
-The product was built to handle millions of data tokenization requests, and the Databunker Pro API has been extended to support bulk tokenization requests.
+Both engines share the same vault, encryption, multi-tenancy, and access-control layers — so the same auditability, key management, and CRBAC policies apply to either flow.
+
+Databunker Pro was built with the latest data privacy requirements in mind, such as data minimization, and is engineered to handle millions of data tokenization requests. The API supports bulk tokenization for efficient batch operations.
 
 ## What Problems Does It Solve?
 

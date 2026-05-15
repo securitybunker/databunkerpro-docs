@@ -120,3 +120,64 @@ For a full list of API requests, check out the <a href="https://documenter.getpo
 4. **SSL/TLS**: Always use HTTPS for secure communication with the API endpoints.
 
 For more detailed information on request/response formats, additional endpoints, or error handling, please refer to the complete Databunker Pro API documentation.
+
+## Cross-tenant System Operations
+
+Databunker Pro provides a dedicated **System Operations** API for cross-tenant queries. These endpoints are used for compliance workflows that span the entire deployment — DSAR fulfillment, regulator queries, right-to-erasure, and forensic investigations — where the answer to *"find every record about this person across all our tenants"* must come from one call rather than N tenant-by-tenant queries.
+
+### Access control
+
+All System Operations endpoints are:
+
+- **Restricted to the main tenant admin (`tenantID = 1`)** — the highest-privilege principal of the deployment. Tenant-level admins cannot invoke these endpoints.
+- **Gated by a `bulkListUnlock` UUID** — short-lived, must be obtained via `/v2/BulkListUnlock` immediately before the call. This is the same default-deny mechanism used for bulk operations: an admin token alone is not enough.
+- **Audited on every call**, including the `request_metadata` provided by the caller (see [Access control](/pro/administration/access-control)).
+
+### Endpoints
+
+| Endpoint                          | Purpose                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `POST /v2/SystemGetUserProfiles`     | Retrieve all profiles for a user (identified by `email` / `phone` / `login` / `custom`) across every tenant.       |
+| `POST /v2/SystemSearchUserProfiles`  | Fuzzy-search for user profiles across every tenant. Mode is auto-detected from the identity value.                 |
+| `POST /v2/SystemDeleteUserProfiles`  | Delete all profiles for a user across every tenant — or restrict to a single tenant via `tenantid` / `tenantname`. |
+| `POST /v2/SystemRestoreUserProfile`  | Restore a previously-deleted user profile for a specific tenant from version history.                              |
+
+Every response includes the originating `tenantid` and `tenantname` for each profile, so the caller can see exactly which tenants the person appeared in.
+
+### Example: find a user across every tenant
+
+```bash
+# Step 1: obtain a short-lived unlock UUID
+UNLOCK=$(curl -s -X POST https://your-databunker-instance/v2/BulkListUnlock \
+  -H "X-Bunker-Token: MAIN_ADMIN_TOKEN" | jq -r .unlockuuid)
+
+# Step 2: cross-tenant lookup
+curl -X POST https://your-databunker-instance/v2/SystemGetUserProfiles \
+  -H "X-Bunker-Token: MAIN_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"mode\": \"email\",
+    \"identity\": \"john.doe@example.com\",
+    \"unlockuuid\": \"$UNLOCK\",
+    \"request_metadata\": {
+      \"purpose\": \"dsar-fulfillment\",
+      \"ticket_id\": \"DSAR-2026-001\"
+    }
+  }"
+```
+
+### Example response
+
+```json
+{
+  "status": "ok",
+  "total": 3,
+  "rows": [
+    { "tenantid": 7, "tenantname": "student-services", "token": "abc-...", "profile": { "...": "..." } },
+    { "tenantid": 9, "tenantname": "analytics",        "token": "def-...", "profile": { "...": "..." } },
+    { "tenantid": 12,"tenantname": "alumni",           "token": "ghi-...", "profile": { "...": "..." } }
+  ]
+}
+```
+
+The same person appears under three different tokens — one per tenant — which is the expected outcome of the per-tenant uniqueness model. The System Operations response is the only place these tokens are correlated, and the correlation is audited.

@@ -45,10 +45,18 @@ sidebarTitle: FAQ
 
 ### Does the tokenization process align with regulations like RBI, PCI DSS, GDPR, etc.?
 
-- Aligns with RBI, DPDPA, PCI DSS, GDPR, HIPAA, ISO 27001, and SOC2 standards.
+- Engineered to operate inside compliance programmes including **RBI, DPDPA, PCI DSS, GDPR, HIPAA, FERPA, ISO 27001, and SOC 2**. Databunker Pro provides the technical controls (AES-256 encryption, hashed indexing, CRBAC, audit trail, tenant isolation, key management) these frameworks require.
+- Databunker Pro has historically been self-hosted, so customers typically inherit cloud-provider certifications (AWS, Azure, GCP) and add their own organisational SOC 2 / ISO 27001 on top.
+- Product-level **SOC 2** attestation is in progress for the managed cloud offering (Databunker Portal) — expected within ~2–3 months. **ISO 27001** product-level certification is roadmapped alongside SOC 2.
 - Supports data minimization, user consent management, audit trails, and a User Privacy Portal for data subject rights.
-- Meets RBI’s data localization and GDPR’s privacy requirements.
+- Meets RBI's data localization and GDPR's privacy requirements via self-hosted in-region deployment.
 - Provides multi-tenancy for compliance in multi-client environments.
+
+### What about IRAP for Australian deployments?
+
+- Databunker Pro is not currently IRAP-assessed at the product level.
+- Because Databunker Pro is self-hosted inside your own cloud tenant, it inherits the IRAP boundary of the underlying platform — **AWS Sydney (`ap-southeast-2`) and Azure Australia East are IRAP-assessed at PROTECTED**, and Databunker Pro runs cleanly inside that boundary.
+- A product-level IRAP assessment can be scoped under professional services if your contract requires it. Australian public-sector and university customers typically combine the cloud platform's IRAP assessment with their own organisational IRAP scope and treat Databunker Pro as a controlled component inside it.
 
 ### What is the de-tokenization policy? Is it role-based, audited, and strictly controlled?
 
@@ -70,11 +78,25 @@ sidebarTitle: FAQ
 
 ### Is the tokenization system scalable to support large transaction volumes (e.g., millions of transactions per day)? What are the performance benchmarks?
 
-- Scales to handle millions of transactions daily, built in Go.
-- Uses time-based tokens for secure handling of bulk requests.
-- Ensures low latency and high throughput with a stateless, multi-tenant architecture.
-- Supports database partitioning for format-preserving records to enhance scalability and performance.
-- Specific benchmark results can be generated based on the number of PII and credit card records.
+Databunker Pro is built in Go on a stateless, horizontally-scalable architecture and is designed for high-volume workloads. Recent internal benchmark, 5,000,000 records of 120-field user profiles on a single instance against a PostgreSQL back-end:
+
+| Metric | Value |
+|---|---|
+| Bulk write throughput | **~1,700 records/sec** sustained |
+| Per-record amortised inside a bulk | **~0.6 ms** |
+| Bulk request latency | **~2.4 sec** for a 4,000-record bulk write |
+| Linear scaling | 1 M and 5 M record runs take the same time per million |
+| Storage footprint | **~5.4 KB** per encrypted 120-field record (27 GB total for 5 M records, including indexes) |
+| Single-record sync write | **3–10 ms** range over a real network |
+| Detokenisation | Hashed-index point lookup; faster than write |
+
+Additional notes:
+
+- Application server is stateless — scales horizontally on Kubernetes.
+- Backend database (PostgreSQL or MySQL) is the eventual bottleneck and is sized against your peak; AWS Aurora PostgreSQL auto-scaling is supported.
+- Bulk tokenisation API amortises network, auth, and transaction overhead — use it for backfills and batch flows.
+- Database partitioning for format-preserving records enhances scalability for very large PCI workloads.
+- Real workloads vary by payload size, search-index usage, and access-control policy depth; we re-benchmark against representative payloads on request.
 
 ### How is token uniqueness ensured? Do you use randomization, hashing with salt, or cryptographic mapping?
 
@@ -112,4 +134,4 @@ sidebarTitle: FAQ
 - Maintains the existing token’s validity, mapping to the updated data in the vault.
 - Generates no new token unless a new record is created (checked via deduplication).
 - Audits and encrypts updates, ensuring tenant-specific updates via multi-tenancy.
-- Databunker Pro team plans to release record versioning in a future version.
+- Record versioning is supported as an optional mode (see [Record Versioning](/pro/concepts/record-versioning)). When enabled, every create and update retains an immutable version of the record with integrity checks, supporting forensic review, compliance audits, and rollback.
