@@ -1,129 +1,146 @@
 ---
 title: AWS Cognito vs Databunker Pro — PII Vault & Tokenization
 sidebarTitle: AWS Cognito vs Databunker Pro
-description: Databunker Pro is a secure replacement for AWS Cognito that gives you PII vaulting, tokenization, and compliance on top of auth you can build in minutes.
+description: LLM-built auth plus Databunker Pro — the modern replacement for AWS Cognito, with self-hosted PII vaulting and compliance built in.
 ---
 
-AWS Cognito is an authentication service — sign-up, sign-in, SSO, and access tokens. That used to be hard to build. It isn't anymore. With modern frameworks and AI-assisted development, you can implement email/password auth, OAuth, Google/Microsoft SSO, and session management in a matter of minutes — not months.
+AWS Cognito was built in 2014, when standing up authentication — sign-in, password reset, OAuth, SSO federation, JWT issuance — was genuinely a multi-month project. That world is gone. With LLM-assisted development and modern auth libraries, the auth layer is now an afternoon's work. What's actually hard in 2026 is the part Cognito doesn't solve: **encrypting PII at rest, tokenising sensitive fields, tracking consent, handling DSARs, proving compliance to an auditor, and meeting cross-border data-localisation laws.**
 
-**Databunker Pro is a secure, self-hosted replacement for Cognito** that makes the auth part trivial and gives you everything Cognito can't: a PII vault, format-preserving tokenization, consent management, a DPO portal, and built-in compliance with GDPR, DPDP Act, HIPAA, and SOC 2.
+**Databunker Pro + LLM-built auth** is the modern replacement for Cognito. You build the auth glue once, in your own codebase, with full control. Databunker Pro handles everything Cognito can't: the PII vault, format-preserving tokenization, consent management, audit, and compliance — self-hosted in any cloud, on-premises, or across jurisdictions.
 
-## Authentication is no longer a hard problem
+## Authentication is now an afternoon, not a project
 
-Cognito was built when implementing auth was genuinely complex. Today, a developer can scaffold a complete authentication system — email/password registration, Google and Microsoft SSO, JWT sessions, password reset flows — in an afternoon using AI coding assistants and well-documented libraries.
+LLMs (Claude, Cursor, Copilot, GitHub Codespaces) scaffold a complete auth system from a single prompt: email/password sign-up, Google / Microsoft / Apple SSO, JWT sessions with refresh, password reset, MFA via TOTP or magic links, account recovery. Pair that with a well-maintained library and you have a production-ready auth layer in hours, not months.
 
-That's exactly how production systems are built today. The auth layer is glue code. The hard problems are elsewhere: **how do you encrypt PII at rest, tokenize sensitive fields, track consent, handle data subject requests, and prove compliance to an auditor?**
+A non-exhaustive list of mature, well-documented auth libraries that pair cleanly with LLM-driven implementation:
 
-Cognito doesn't solve any of those. Databunker Pro does.
+| Stack             | Library                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node / Next.js    | [NextAuth.js / Auth.js](https://authjs.dev/), [Lucia](https://lucia-auth.com/), [Passport.js](https://www.passportjs.org/)                  |
+| Python            | [Authlib](https://authlib.org/), [FastAPI Users](https://fastapi-users.github.io/fastapi-users/)                                            |
+| Go                | [Ory Kratos](https://www.ory.sh/kratos/), [GoTrue](https://github.com/supabase/gotrue)                                                      |
+| Multi-language    | [Keycloak](https://www.keycloak.org/), [Ory](https://www.ory.sh/), [Authelia](https://www.authelia.com/)                                    |
 
-## What you get with Databunker Pro that Cognito can't offer
+Any of these, combined with an LLM that knows your codebase, produces a working auth system the same day you start. The deliverable is yours — no per-MAU bill, no vendor lock-in, no AWS dependency.
 
-Databunker Pro replaces Cognito's user directory with a **privacy-first PII vault** and adds an entire compliance layer on top:
+## What auth doesn't solve — and Databunker Pro does
 
-- **PII Vault** — AES-256 per-record encryption with secure hash-based search indexes
-- **Tokenization engine** — UUID and format-preserving tokens (Luhn-valid credit card tokens, integers, timestamps)
-- **Consent management** — track legal basis, user agreements, and processing operations for GDPR/DPDP Act
-- **DPO portal** — built-in interface for Data Protection Officers to handle access, erasure, and portability requests
-- **Audit trail** — every API call logged with encrypted PII context
-- **Multi-tenancy** — native row-level isolation in PostgreSQL
-- **Record versioning** — full version history for every user record
-- **Auto-expiration** — sliding and absolute TTLs for automatic data deletion
-- **Fuzzy search** — search encrypted records without decrypting the database
-- **Shamir key sharing** — master key split across multiple custodians for recovery
-- **Self-hosted** — deploy on any cloud, on-premises, or in your customer's region
+The auth layer issues identity tokens. It does **not** answer:
+
+- **Where do you store your users' PII so it isn't exposed in logs, backups, or a SQL injection?**
+- **How do you tokenise credit-card numbers to shrink PCI scope?**
+- **How do you fulfil a GDPR / DPDPA right-to-erasure request across every system that holds the user's data?**
+- **How do you prove to an auditor that every PII access was authorised and logged?**
+- **How do you keep Indian users' PII in India, Russian users' PII in Russia, and EU users' PII in the EU — all simultaneously?**
+
+These are the hard problems. Databunker Pro is built for them:
+
+- **[PII Vault](/pro/get-started/pii-vault)** — AES-256 per-record encryption; the application stores only UUID tokens, never PII.
+- **[Format-preserving tokenization](/pro/concepts/tokenization)** — Luhn-valid credit-card tokens, integer tokens, timestamp tokens. Real PCI-scope reduction.
+- **Consent management** — legal-basis tracking, user agreements, processing-activity records aligned with GDPR / DPDPA.
+- **DPO operations** — DSAR fulfilment, right-to-erasure, data-portability via the separate [Databunker DPO product](https://databunker.org/use-case/dpo-management-portal/).
+- **Audit trail** — per-record, per-field, with encrypted PII context. See [Access control](/pro/administration/access-control).
+- **[Multi-tenancy](/pro/administration/multi-tenancy)** — PostgreSQL row-level security; cryptographic per-domain isolation.
+- **[Record versioning](/pro/concepts/record-versioning)** — immutable history for every user record.
+- **[Fuzzy search](/pro/concepts/fuzzy-search)** — typo-tolerant search on encrypted data.
+- **[Shared records](/pro/concepts/shared-records)** — time-limited UUID references for safe cross-system sharing.
+- **[Shamir secret sharing](/pro/administration/shamir-keys)** — master-key recovery split across multiple custodians.
+- **BYOK / HYOK** — wrapping key in Kubernetes secret, AWS KMS, HashiCorp Vault, or hardware HSM.
+- **[Multi-jurisdiction deployment](/pro/concepts/global-deployment)** — one vault per jurisdiction (India, Russia, Turkey, EU, etc.) — a topology Cognito cannot match because Cognito is AWS-bound.
+- **Self-hosted** — deploy on any cloud, on-premises, in a sovereign region, or inside a customer's tenant.
+- **[Predictable pricing](/pro/get-started/performance)** — per-instance license, flat regardless of user count. No per-MAU bill.
+
+## Reference architecture
+
+```text
+   [ User ] ─── sign-in ───► [ Your auth layer (NextAuth / Lucia / Ory / Keycloak / ...) ]
+                                                  │
+                                       Built once with LLM assistance.
+                                       Issues JWT / session.
+                                                  │
+                                                  ▼
+                                       [ Your application ]
+                                                  │
+                                                  ▼
+                                       [ Databunker Pro ]
+                                       AES-256 encrypted vault
+                                       Tokenization · CRBAC · audit
+                                       Self-hosted, any region
+```
+
+The application database only ever stores: a user identifier, a Databunker `user_token`, and any non-PII business data. PII lives in the vault. Auth lives in your own code.
 
 ## Comparison table
 
-| Capability | Databunker Pro | AWS Cognito |
-|---|---|---|
-| **Primary purpose** | PII vault, tokenization, consent & DPO portal | Authentication & user directory |
-| **Deployment** | Self-hosted (Docker, Kubernetes), any cloud or on-prem | AWS only |
-| **PII encryption** | AES-256 per-record, FIPS 140-2 compliant | AWS-managed KMS (shared) |
-| **Tokenization** | UUID + format-preserving tokens | None |
-| **Data minimization** | Built-in — apps store only tokens | Not supported |
-| **Consent management** | Built-in legal basis & agreement tracking | None |
-| **DPO portal** | Built-in | None |
-| **Audit trail** | Field-level, every API call | CloudTrail (API-level only) |
-| **Format-preserving tokenization** | Credit cards (Luhn-valid), integers, timestamps | None |
-| **Multi-tenancy** | Native row-level isolation (PostgreSQL) | Separate user pools |
-| **Record versioning** | Built-in | None |
-| **Right to erasure (GDPR Art. 17)** | Single API call | Manual cleanup |
-| **DPDP Act / GDPR / HIPAA / SOC 2** | Built-in compliance controls | Shared responsibility model |
-| **Vendor lock-in** | None | Tied to AWS |
-| **Fuzzy search on encrypted data** | Supported | None |
-| **Shamir key sharing** | Master key split for recovery | AWS KMS only |
-| **Data residency** | Any region, on-premises, customer-hosted | AWS regions only |
-| **Bulk operations** | Bulk tokenization & export via API | None |
-| **Record auto-expiration** | Sliding and absolute TTLs | Refresh token TTL only |
+| Capability                                  | AWS Cognito                                | Databunker Pro + your auth                                              |
+| ------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| **Primary purpose**                         | Auth + user directory                      | PII vault, tokenization, consent, compliance                            |
+| **Where auth lives**                        | Managed AWS service                        | In your codebase (LLM-built, mature library)                            |
+| **Where PII lives**                         | Cognito user attributes (AWS)              | Databunker Pro vault (your infra, any cloud)                            |
+| **PII encryption**                          | AWS-managed KMS at the user-pool level     | AES-256 per record, FIPS 140-2, customer-controlled keys                |
+| **Tokenization (UUID + format-preserving)** | ❌                                         | ✅ Native; shrinks PCI scope                                            |
+| **Consent management & legal basis**        | ❌                                         | ✅ Native (GDPR / DPDPA aligned)                                        |
+| **Right-to-erasure**                        | `AdminDeleteUser` (PII in logs/backups still your problem) | Single API call; audit-bounded; record-versioning aware     |
+| **Audit trail**                             | CloudTrail (API-level)                     | Per-record, per-field, with encrypted PII context                       |
+| **Fuzzy search on encrypted data**          | ❌                                         | ✅                                                                      |
+| **Record versioning**                       | ❌                                         | ✅                                                                      |
+| **Customer-held keys (BYOK / HYOK)**        | KMS CMK option, AWS-bound                  | K8s secret, AWS KMS, HashiCorp Vault, or hardware HSM                   |
+| **Multi-tenancy**                           | Separate user pools                        | Native PostgreSQL RLS                                                   |
+| **Deployment**                              | AWS only                                   | Any cloud, on-prem, sovereign region, customer tenant                   |
+| **Data residency**                          | AWS regions                                | Any region; [multi-jurisdiction topology](/pro/concepts/global-deployment) supported |
+| **Vendor lock-in**                          | AWS                                        | None — Docker / Helm artifacts                                          |
+| **Pricing model**                           | Per MAU above the free tier                | Per-instance license, flat                                              |
+| **Future flexibility**                      | Constrained by what AWS adds to Cognito    | Your codebase — change auth library, add MFA mode, swap SSO provider any time |
+
+## Migration from Cognito
+
+The honest practical answer: **Cognito does not allow exporting password hashes**, so a migration is necessarily a forced-reset event. The standard playbook:
+
+1. **Stand up Databunker Pro** in your target environment (Docker / Helm).
+2. **Build the replacement auth layer** in your codebase using an LLM and the library of your choice (NextAuth, Lucia, Ory, Keycloak, etc.). Wire it to Databunker Pro for the user record.
+3. **Export the Cognito user list** — emails, attributes, group memberships — via `ListUsers`.
+4. **Bulk-import into Databunker Pro** using [`UserCreateBulk`](/pro/get-started/performance) — at ~1,700 records/sec on a single instance, a typical Cognito directory imports in minutes.
+5. **Migration window**: switch the auth layer to your replacement and force a one-time password reset email to every user (unavoidable — Cognito does not expose hashes).
+6. **Decommission the Cognito user pool** once the population has migrated.
+
+For organisations with strict downtime / UX constraints, a **dual-running window** (Cognito for existing users, new auth + Databunker for new ones, slow migration over weeks) is preferred. Databunker Pro's bulk import and multi-tenancy support this naturally.
 
 ## Code examples
 
-### How Cognito stores PII (the problem)
-
-With Cognito, PII lives inside AWS as user attributes. It's accessible via API, visible in the AWS console, included in exports, and you have no control over per-record encryption:
+### Sign-up: auth in your codebase, PII in Databunker
 
 ```javascript
-// AWS Cognito — PII stored as user attributes
-const cognito = new AWS.CognitoIdentityServiceProvider();
+// 1. User signs up via your auth layer (NextAuth / Lucia / Ory / etc.)
+//    Your auth issues a session and gives you the verified email.
 
-await cognito.adminUpdateUserAttributes({
-  UserPoolId: 'us-east-1_XXXXX',
-  Username: 'john@example.com',
-  UserAttributes: [
-    { Name: 'custom:ssn', Value: '123-45-6789' },      // PII in Cognito
-    { Name: 'custom:phone', Value: '+1-555-123-4567' }, // PII in Cognito
-    { Name: 'address', Value: '123 Main St' }            // PII in Cognito
-  ]
-}).promise();
-// PII is now in AWS — in their console, their backups, their logs
-```
-
-### How Databunker Pro stores PII (the solution)
-
-With Databunker Pro, your application database never contains PII. You store a safe UUID token and retrieve the real data only when needed:
-
-```javascript
-const axios = require('axios');
-
-// 1. Store PII in Databunker Pro — get back a safe token
+// 2. Store PII in Databunker — get back a safe UUID token
 const response = await axios.post('https://your-databunker/v2/UserCreate', {
   profile: {
-    email: 'john@example.com',
-    first: 'John',
-    last: 'Doe',
-    phone: '+1-555-123-4567',
-    ssn: '123-45-6789',
-    address: '123 Main St'
+    email:   form.email,
+    first:   form.firstName,
+    last:    form.lastName,
+    phone:   form.phone,
+    address: form.address,
+    dob:     form.dateOfBirth,
   }
 }, {
   headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
 });
 
 const userToken = response.data.token;
-// "a21fa1d3-5e47-11ef-a729-32e05c6f6c16"
 
-// 2. Store only the token in your app database — zero PII
+// 3. Store only (userId, userToken) in your app DB — zero PII anywhere outside the vault
 await db.query(
   'INSERT INTO users (id, databunker_token) VALUES ($1, $2)',
-  [userId, userToken]
+  [authUser.id, userToken]
 );
-
-// 3. Retrieve PII only when you need to display it
-const user = await axios.post('https://your-databunker/v2/UserGet', {
-  mode: 'token',
-  identity: userToken
-}, {
-  headers: { 'X-Bunker-Token': process.env.DATABUNKER_API_KEY }
-});
-
-console.log(user.data.profile.email); // "john@example.com"
 ```
 
-If your database gets breached, attackers see only meaningless UUID tokens.
+If your application database gets breached, attackers see only opaque UUIDs — no PII, no contact data, no addresses.
 
-### Format-preserving credit card tokenization
+### Format-preserving credit-card tokenization
 
-This is something Cognito has no concept of. Databunker Pro can tokenize a real credit card number into a Luhn-valid fake that passes format validation in downstream systems:
+Cognito has no concept of this. Databunker Pro tokenises a real card number into a Luhn-valid token that passes format validation in downstream systems — so legacy fraud / payment / risk systems keep working without ever seeing the real card.
 
 ```bash
 curl -X POST https://your-databunker/v2/TokenCreate \
@@ -144,14 +161,8 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 }
 ```
 
-The `tokenbase` passes Luhn checks and format validation — but maps to no real card. Your legacy systems keep working without ever seeing real card numbers.
-
-## Why not just use Cognito for auth and add Databunker later?
-
-Because you'd be paying for a managed service that does less than what you can build yourself in minutes. Cognito locks you into AWS, charges per MAU, imposes attribute limits, and gives you zero control over how PII is stored or encrypted. Meanwhile, the auth part — the only thing Cognito actually does — is the easiest piece of the puzzle to implement yourself.
-
-With Databunker Pro, you get the secure user storage layer that Cognito was never designed to be, and you build the thin auth layer on top with whatever tools your team already knows. No vendor lock-in. No per-user pricing for basic sign-in. No compliance gaps.
+`tokenbase` passes Luhn checks and 16-digit format validation, but maps to no real card. PCI audit scope shrinks to the systems that genuinely need detokenisation.
 
 ## The bottom line
 
-Authentication is a solved problem — you can build SSO and email/password auth in minutes with modern tools. What's not solved is **PII protection, tokenization, consent management, and regulatory compliance**. That's what Databunker Pro is built for. Instead of paying AWS for a user directory that doesn't protect your data, replace it with a system that does.
+Cognito was the right answer when authentication was a hard build. With LLM-assisted development, auth is an afternoon's work in your own codebase — and **you keep the code, the keys, the deployment, and the data**. Pair that with Databunker Pro and you get the secure user storage, tokenization, consent management, audit, and cross-jurisdiction sovereignty that Cognito was never designed to provide. The result: no per-MAU bill, no AWS lock-in, full control over your users' PII, and a compliance posture that holds up in a regulator review.

@@ -29,18 +29,18 @@ Deploy a separate Databunker Pro instance in each jurisdiction where you hold PI
 - **In-region** — deployed on local cloud infrastructure (AWS Mumbai, Azure Russia, etc.) or local on-prem hardware.
 - **Operated locally** if local law requires (operator citizenship, residency, or licensing constraints).
 
-The application layer — your API gateway, MuleSoft proxy, or service mesh — routes each request to the correct regional vault based on user domicile, data classification, or originating system.
+The application chooses which regional vault to call based on user domicile, data classification, or originating system.
 
 ```text
-                                  [ Application / API Gateway ]
-                                              |
-        +-------------------+-----------------+-----------------+-------------------+
-        |                   |                 |                 |                   |
-        v                   v                 v                 v                   v
- [ Pro — EU ]       [ Pro — India ]   [ Pro — Russia ]   [ Pro — Turkey ]   [ Pro — Brazil ]
- GDPR boundary      DPDPA boundary    152-FZ boundary    KVKK boundary      LGPD boundary
- keys local         keys local        keys local         keys local         keys local
- audit local        audit local       audit local        audit local        audit local
+                                          [ Application ]
+                                                |
+        +-------------------+-------------------+-------------------+-------------------+
+        |                   |                   |                   |                   |
+        v                   v                   v                   v                   v
+ [ Pro — EU ]       [ Pro — India ]     [ Pro — Russia ]    [ Pro — Turkey ]    [ Pro — Brazil ]
+ GDPR boundary      DPDPA boundary      152-FZ boundary     KVKK boundary       LGPD boundary
+ keys local         keys local          keys local          keys local          keys local
+ audit local        audit local         audit local         audit local         audit local
 ```
 
 Each regional vault holds **only** the records of users domiciled in that jurisdiction. Cross-vault correlation is not possible at the SQL or token layer — that is the point of the pattern.
@@ -59,7 +59,7 @@ Running a separate DPO seat per vault is impractical at scale.
 
 [**Databunker DPO**](https://databunker.org/use-case/dpo-management-portal/) is the operational layer designed for exactly this scenario. DPO connects to each regional Pro deployment over an authenticated channel and gives the privacy office a **single UI** spanning the full estate, with the critical property that:
 
-- **PII never leaves its home jurisdiction.** Only **operational signals** flow through DPO — DSAR tickets, consent state transitions, audit summaries, processing-activity metadata, aggregated metrics.
+- **Minimises the chance of PII leaving its home jurisdiction.** By design, only **operational signals** flow through DPO — DSAR tickets, consent state transitions, audit summaries, processing-activity metadata, aggregated metrics. Raw PII is never required for these operations, so under normal operation it stays inside the regional vault. Customers remain responsible for configuring DPO and any custom workflows to honour their local data-localisation constraints.
 - Each regional Pro deployment continues to enforce its own access control, audit, and key custody locally.
 
 This lets a small privacy team operate at global scale without violating any localisation rule, because the data that crosses borders in the DPO operational plane is not personal data — it is metadata about the privacy operations themselves.

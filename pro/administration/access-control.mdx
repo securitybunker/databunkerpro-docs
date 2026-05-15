@@ -81,7 +81,7 @@ This policy will grant to a teacher entity access to the student's parent inform
 
 ## Passing runtime context with `request_metadata`
 
-Most Databunker Pro API endpoints accept an optional **`request_metadata`** object on the request body. The caller (application code, an API gateway, or a tokenisation proxy) uses it to pass runtime context — values like the calling environment, the purpose of the request, the originating IP address, a session identifier, a ticket number — that the access-control engine can evaluate at policy time.
+Most Databunker Pro API endpoints accept an optional **`request_metadata`** object on the request body. The caller (application code, an API gateway, or a tokenisation proxy) uses it to pass runtime context — values like the calling environment, the purpose of the request, the originating IP address, a ticket number — that the access-control engine can evaluate at policy time.
 
 CRBAC `Condition` blocks can reference `request_metadata` values directly, so the same policy can grant or deny access based on **why** and **where** the request is coming from, not just **who** is making it. This is purpose-of-use enforcement.
 
@@ -133,7 +133,6 @@ A request from the same role without those metadata values — or with different
 | `environment`       | `production` / `staging` / `dev` — scopes policies per environment.  |
 | `purpose`           | A business-domain purpose-of-use code (e.g., `fraud-investigation`). |
 | `caller_ip`         | Client IP — useful for IP-range conditions.                          |
-| `session_id`        | Caller session, for incident reconstruction.                         |
 | `ticket_id`         | Linking the access to a ticket / case for accountability.            |
 | `app_name`          | Calling application — useful when multiple apps share a role.        |
 
