@@ -1,0 +1,91 @@
+---
+title: Multi-jurisdiction deployment
+sidebarTitle: Multi-jurisdiction deployment
+---
+
+For global organisations subject to **data-localisation** obligations in multiple countries, the right architecture is to run **one Databunker Pro instance per jurisdiction**. Each instance keeps the PII for that jurisdiction inside the jurisdiction, with its own keys, audit trail, and operators if local law requires. This page covers the pattern, the reasons behind it, and how the privacy office runs operations across N deployments without violating data-localisation rules.
+
+## The problem this pattern solves
+
+A growing number of jurisdictions explicitly prohibit transferring personal data out of the country — or impose burdensome conditions that make centralising PII in one cloud region commercially impractical. Examples:
+
+| Jurisdiction | Law / framework               | Localisation stance                                                                                       |
+| ------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| EU / EEA     | GDPR (Chapter V transfers)    | Cross-border transfers require an Article 45 adequacy decision, Article 46 safeguards, or SCCs.           |
+| India        | DPDPA                         | Cross-border transfers permitted only to whitelisted countries; sensitive data subject to stricter rules. |
+| Russia       | Federal Law 152-FZ            | Personal data of Russian citizens must be **stored and primarily processed** inside Russia.               |
+| Turkey       | KVKK                          | Cross-border transfer requires explicit consent or KVKK Board approval.                                   |
+| Saudi Arabia | PDPL                          | Restrictions on cross-border transfer of personal data of residents.                                      |
+| Brazil       | LGPD                          | Cross-border transfer permitted under specific legal bases, with ANPD oversight.                          |
+| China        | PIPL                          | Strict cross-border transfer requirements, including CAC security assessment for large processors.        |
+
+A single-region deployment that holds PII for all these jurisdictions in, say, AWS Frankfurt, is non-compliant the moment a Russian, Indian, or Chinese resident's record lands in the vault.
+
+## The pattern
+
+Deploy a separate Databunker Pro instance in each jurisdiction where you hold PII. Each instance is:
+
+- **Independent** — its own database, its own master key, its own wrapping key, its own audit log.
+- **In-region** — deployed on local cloud infrastructure (AWS Mumbai, Azure Russia, etc.) or local on-prem hardware.
+- **Operated locally** if local law requires (operator citizenship, residency, or licensing constraints).
+
+The application layer — your API gateway, MuleSoft proxy, or service mesh — routes each request to the correct regional vault based on user domicile, data classification, or originating system.
+
+```text
+                                  [ Application / API Gateway ]
+                                              |
+        +-------------------+-----------------+-----------------+-------------------+
+        |                   |                 |                 |                   |
+        v                   v                 v                 v                   v
+ [ Pro — EU ]       [ Pro — India ]   [ Pro — Russia ]   [ Pro — Turkey ]   [ Pro — Brazil ]
+ GDPR boundary      DPDPA boundary    152-FZ boundary    KVKK boundary      LGPD boundary
+ keys local         keys local        keys local         keys local         keys local
+ audit local        audit local       audit local        audit local        audit local
+```
+
+Each regional vault holds **only** the records of users domiciled in that jurisdiction. Cross-vault correlation is not possible at the SQL or token layer — that is the point of the pattern.
+
+## The next-order problem: operating privacy across N vaults
+
+Once an organisation has five, ten, or fifteen regional Pro deployments, the privacy office faces a new problem:
+
+- A data subject in India submits a DSAR through the company's global website. How does the DPO team find their data without logging into the Indian Pro instance separately?
+- A consent withdrawal in Brazil needs to propagate to every system that holds the user's data — but the regional vaults are intentionally air-gapped at the PII level.
+- A compliance report for the EU board needs aggregated metrics (number of records, DSAR counts, consent rates) across every region.
+
+Running a separate DPO seat per vault is impractical at scale.
+
+## The unifier: Databunker DPO
+
+[**Databunker DPO**](https://databunker.org/use-case/dpo-management-portal/) is the operational layer designed for exactly this scenario. DPO connects to each regional Pro deployment over an authenticated channel and gives the privacy office a **single UI** spanning the full estate, with the critical property that:
+
+- **PII never leaves its home jurisdiction.** Only **operational signals** flow through DPO — DSAR tickets, consent state transitions, audit summaries, processing-activity metadata, aggregated metrics.
+- Each regional Pro deployment continues to enforce its own access control, audit, and key custody locally.
+
+This lets a small privacy team operate at global scale without violating any localisation rule, because the data that crosses borders in the DPO operational plane is not personal data — it is metadata about the privacy operations themselves.
+
+### DPO deployment options
+
+| Option              | When to use                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **SaaS (default)**  | DPO hosted in the Databunker Portal. The privacy team logs in via the web. Best for most customers.        |
+| **Self-hosted**     | Enterprise customers who require the operational layer to also run inside their own perimeter (e.g., highly regulated industries, sovereign clouds) can self-host DPO. |
+
+## When NOT to use this pattern
+
+This pattern is for organisations operating in **multiple jurisdictions with localisation constraints**. If you operate in a single jurisdiction, or in multiple jurisdictions without conflicting localisation rules, the right tool is [**multi-tenancy inside a single Pro instance**](/pro/administration/multi-tenancy) — it gives cryptographic per-domain isolation without the operational overhead of running N deployments.
+
+| Use one Pro + multi-tenancy when           | Use multi-jurisdiction Pro deployments when             |
+| ------------------------------------------ | ------------------------------------------------------- |
+| Single jurisdiction.                       | Multiple jurisdictions with localisation laws.          |
+| Multiple security domains, one legal home. | Each region's PII is legally required to stay in-region. |
+| One operations team.                       | Local operations possibly required by law.              |
+
+The two patterns can be combined: each regional Pro deployment can itself use multi-tenancy internally to separate its security domains (Student Services vs Analytics vs External Integrations), so the architecture remains consistent regardless of scale.
+
+## Related
+
+- [Multi-tenancy](/pro/administration/multi-tenancy) — per-instance tenant isolation (different concern).
+- [Architecture](/pro/get-started/architecture) — core single-instance architecture.
+- [Security overview](/pro/get-started/security-overview) — sovereignty and key custody guarantees that make this pattern work.
+- [Databunker DPO](https://databunker.org/use-case/dpo-management-portal/) — the operational unifier across regional Pro deployments.
