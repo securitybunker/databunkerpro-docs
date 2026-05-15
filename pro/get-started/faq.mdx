@@ -78,25 +78,9 @@ sidebarTitle: FAQ
 
 ### Is the tokenization system scalable to support large transaction volumes (e.g., millions of transactions per day)? What are the performance benchmarks?
 
-Databunker Pro is built in Go on a stateless, horizontally-scalable architecture and is designed for high-volume workloads. Recent internal benchmark, 5,000,000 records of 120-field user profiles on a single instance against a PostgreSQL back-end:
+Yes. Databunker Pro is built in Go on a stateless, horizontally-scalable architecture. A recent internal benchmark on a single AWS EC2 `m6i.2xlarge` (5,000,000 records, 120-field user profiles, co-located PostgreSQL) sustained **~1,700 records/sec** on bulk writes with linear scaling from 1 M to 5 M records.
 
-| Metric | Value |
-|---|---|
-| Bulk write throughput | **~1,700 records/sec** sustained |
-| Per-record amortised inside a bulk | **~0.6 ms** |
-| Bulk request latency | **~2.4 sec** for a 4,000-record bulk write |
-| Linear scaling | 1 M and 5 M record runs take the same time per million |
-| Storage footprint | **~5.4 KB** per encrypted 120-field record (27 GB total for 5 M records, including indexes) |
-| Single-record sync write | **3–10 ms** range over a real network |
-| Detokenisation | Hashed-index point lookup; faster than write |
-
-Additional notes:
-
-- Application server is stateless — scales horizontally on Kubernetes.
-- Backend database (PostgreSQL or MySQL) is the eventual bottleneck and is sized against your peak; AWS Aurora PostgreSQL auto-scaling is supported.
-- Bulk tokenisation API amortises network, auth, and transaction overhead — use it for backfills and batch flows.
-- Database partitioning for format-preserving records enhances scalability for very large PCI workloads.
-- Real workloads vary by payload size, search-index usage, and access-control policy depth; we re-benchmark against representative payloads on request.
+For the full benchmark methodology, latency / throughput / storage numbers, and capacity-planning guidance, see [Performance & benchmarks](/pro/get-started/performance).
 
 ### How is token uniqueness ensured? Do you use randomization, hashing with salt, or cryptographic mapping?
 

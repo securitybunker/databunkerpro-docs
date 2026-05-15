@@ -1,0 +1,113 @@
+---
+title: Performance & benchmarks
+sidebarTitle: Performance
+description: Measured throughput, latency, and storage characteristics for Databunker Pro at scale, with notes on what the numbers mean for capacity planning and when to scale horizontally.
+---
+
+This page documents measured Databunker Pro performance on a representative workload — a 120-field user-profile vault sized at 5 million records. It is intended as a starting point for capacity planning, not as a marketing benchmark; the numbers are produced from an internal performance run and the methodology is documented so you can reproduce or refine against your own payloads.
+
+## Benchmark setup
+
+| Parameter           | Value                                                                |
+| ------------------- | -------------------------------------------------------------------- |
+| Workload            | `UserCreate` (PII tokenisation) — full user profiles                 |
+| Profile shape       | 120 fields per profile (mixed PII + custom application fields)       |
+| Record count        | 5,000,000                                                            |
+| Host                | **AWS EC2 `m6i.2xlarge`** (8 vCPU Intel Ice Lake, 32 GB RAM)         |
+| Backend database    | PostgreSQL, **co-located on the same EC2 host**                      |
+| Databunker Pro      | Single instance, stateless application server (same host)            |
+| Load generator      | Python scripts from the [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) repo — [`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py) for writes and [`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_fetcher.py) for reads — running locally on the same host (no client-side network bottleneck) |
+| Write mode          | Bulk (`UserCreateBulk`) at **4,000 records per request**             |
+| Indexing            | Default hashed indexes on `email`, `phone`, `login`, `custom`        |
+| Encryption          | AES-256 at rest, TLS in transit (defaults)                           |
+
+<Note>
+The numbers below were produced on a **modest single EC2 instance** with the database co-located. They are not the upper bound — separating the database onto a dedicated managed PostgreSQL service (e.g., Aurora) and scaling the application tier horizontally produces materially higher throughput.
+</Note>
+
+## Measured throughput and latency
+
+| Metric                              | Value                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| **Sustained bulk write throughput** | **~1,700 records/sec**                                                   |
+| Per-record amortised in a bulk      | **~0.6 ms**                                                              |
+| Per-bulk request latency            | **~2.4 seconds** for a 4,000-record bulk                                 |
+| Time to write 1,000,000 records     | **~10 minutes**                                                          |
+| Time to write 5,000,000 records     | **~50 minutes** — same per-million rate as 1 M (linear scaling)          |
+| Single-record sync write            | **3–10 ms** range over a real network                                    |
+| Detokenisation (`UserGet`)          | Hashed-index point lookup; faster than write (precise number tracked in follow-up benchmark) |
+
+## Storage footprint
+
+| Metric                        | Value                                                                 |
+| ----------------------------- | --------------------------------------------------------------------- |
+| Total database size (5 M)     | **27 GB**                                                             |
+| Heap table (`users`)          | 832 MB                                                                |
+| Indexes                       | 655 MB                                                                |
+| Encrypted record TOAST        | ~25.5 GB (the bulk of the footprint — encrypted profile blobs)        |
+| **Per-record on disk**        | **~5.4 KB** per fully-encrypted 120-field profile, including indexes  |
+
+## What the numbers mean
+
+### For capacity planning
+
+- **~1,700 records/sec sustained on one instance** is more than enough for almost any single-organisation steady-state workload. A typical large enterprise serving 100,000 users only needs to ingest its full user base **once** in under a minute.
+- **Linear scaling 1 M → 5 M** means the vault doesn't slow down as it grows. Plan storage; don't plan throughput penalties.
+- **5.4 KB per encrypted 120-field record** — multiply by your expected record count to size your PostgreSQL volume. A 10-million-record deployment needs roughly 54 GB plus operational headroom.
+
+### Bulk vs single-record latency
+
+The headline ~0.6 ms per record is **amortised inside a 4,000-record bulk request**. It includes network, auth, encryption, hashing, indexing, and transaction commit averaged across the batch. **Single-record synchronous writes will be higher** — 3–10 ms is typical over a real network — because each call carries its own connection, auth, and transaction overhead.
+
+Plan accordingly:
+
+- **Backfills and batch flows**: use `UserCreateBulk` and assume ~0.6 ms per record.
+- **Real-time API flows**: assume 3–10 ms per single-record write. Throughput in production is then `(concurrency × 1 / per-call latency)` — i.e., 100 concurrent worker threads writing at 5 ms apiece gives 20,000 records/sec.
+
+### Why no detokenisation number yet?
+
+Detokenisation (`UserGet`) is a hashed-index point lookup, which is structurally faster than a write. Most internal runs put it well below the per-record write latency. We are documenting a precise number in a follow-up benchmark and will publish it here.
+
+## When to scale horizontally
+
+The application server is **stateless**, so horizontal scaling on Kubernetes is straightforward. Add instances when:
+
+- The PostgreSQL backend is healthy and CPU-headroom on the application pod is exhausted (vault is CPU-bound on encryption + indexing under heavy bulk load).
+- You need geographic locality — see [Multi-jurisdiction deployment](/pro/concepts/global-deployment).
+- You want isolation between workload classes (e.g., dedicate one instance to batch jobs, another to real-time API).
+
+The backend database is usually the eventual bottleneck before the application server. Use **AWS Aurora PostgreSQL Auto-Scaling** (or equivalent on Azure / GCP) for production deployments — this lifts the typical wall-clock bottleneck.
+
+## Running your own benchmark
+
+The numbers above are a starting point. Real workloads vary by:
+
+- **Payload size** — a 12-field profile tokenises faster than a 120-field profile; a 1 KB profile differs from a 10 KB profile.
+- **Search-index field count** — each hashed index adds a small per-record cost.
+- **Access-control policy depth** — CRBAC evaluation on reads scales with policy complexity.
+- **Database backend choice and sizing** — PostgreSQL vs MySQL, instance class, IOPS, network latency to the DB.
+
+To reproduce or refine for your context, start from the open-source Python load scripts we used:
+
+- **[`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py)** — drives `UserCreateBulk` to generate and tokenise a configurable number of user profiles. This is the script that produced the bulk-write numbers above.
+- **[`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_fetcher.py)** — drives `UserGet` to retrieve previously-tokenised records, for measuring detokenisation throughput and latency.
+
+Both scripts are in the official [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) SDK repo and are designed to be edited — adjust the profile shape, batch size, and concurrency to match your workload.
+
+### Steps
+
+1. Adjust the profile shape in `bulk_user_creator.py` to match the actual JSON your application sends.
+2. Pre-warm the backend database (vacuum, statistics).
+3. Run `bulk_user_creator.py` co-located with the Databunker Pro instance to remove client-side network noise.
+4. Measure: sustained records/sec, p50 / p95 / p99 per-bulk latency, database CPU and IOPS.
+5. Run `bulk_user_fetcher.py` against the same vault to capture `UserGet` performance.
+
+Contact us through [office@databunker.org](mailto:office@databunker.org) if you would like the professional services team to design and run a benchmark against your representative payloads as part of an engagement.
+
+## What we'll add next
+
+- Precise detokenisation latency numbers (`UserGet` p50 / p95 / p99).
+- Multi-instance horizontal-scaling curve (records/sec per added pod).
+- Format-preserving tokenisation throughput (`TokenCreate` / `TokenCreateBulk`).
+- MySQL backend comparison.
+- Cold-cache vs warm-cache `UserGet` profile.
