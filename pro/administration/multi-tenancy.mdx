@@ -131,7 +131,7 @@ All System Operations endpoints are:
 
 - **Restricted to the main tenant admin (`tenantID = 1`)** — the highest-privilege principal of the deployment. Tenant-level admins cannot invoke these endpoints.
 - **Gated by a `bulkListUnlock` UUID** — short-lived, must be obtained via `/v2/BulkListUnlock` immediately before the call. This is the same default-deny mechanism used for bulk operations: an admin token alone is not enough.
-- **Audited on every call**, including the `request_metadata` provided by the caller (see [Access control](/pro/administration/access-control)).
+- **Audited on every call.**
 
 ### Endpoints
 
