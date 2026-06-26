@@ -1,0 +1,52 @@
+---
+title: Update the license key
+sidebarTitle: Update license
+description: Apply a new license key to a running Databunker Pro instance.
+---
+
+Databunker Pro stores its license key in the database (the `config` table, under the `licensekey` key). You can replace it at any time on a running instance — there is no need to restart the service or redeploy.
+
+A new license is typically applied when you:
+
+- Move from **Trial** mode to a paid license.
+- Renew a license that is about to expire.
+- Increase the maximum number of records (`maxrecords`) your plan allows.
+
+<Note>
+Only the **main tenant** administrator (root token, tenant id `1`) can set the license key. The new key is validated before it is saved — an invalid or expired key is rejected and the existing license stays in place.
+</Note>
+
+## Before you start
+
+To complete this guide, you'll need:
+
+- A running Databunker Pro instance.
+- The **root access token** of the main tenant. See [Generate admin credentials](/pro/installation/generate-admin-credentials).
+- A valid license key. [Book a call](https://cal.com/databunker-team/30min) to obtain or renew one.
+
+## Update via the API
+
+Send the new key to the `SystemSetLicenseKey` endpoint. All Databunker Pro API calls use `POST /v2/<Method>` and authenticate with the `X-Bunker-Token` header.
+
+```bash
+curl -X POST http://localhost:3000/v2/SystemSetLicenseKey \
+  -H "X-Bunker-Token: YOUR-ROOT-TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"licensekey": "YOUR-NEW-LICENSE-KEY"}'
+```
+
+A successful response looks like this:
+
+```json
+{ "status": "ok", "result": "done" }
+```
+
+If the key is invalid or expired, the call returns an error and the current license is left unchanged:
+
+```json
+{ "status": "error", "message": "License key is invalid" }
+```
+
+<Tip>
+You can pre-load a license at first start with the `DATABUNKER_LICENSEKEY` environment variable. This is only used during the initial setup; once a key is stored in the database, update it using the API call above.
+</Tip>

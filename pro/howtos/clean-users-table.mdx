@@ -1,0 +1,78 @@
+---
+title: Clean the users table
+sidebarTitle: Clean users table
+description: Remove all user records and related data from a Databunker Pro instance.
+---
+
+This guide explains how to wipe **all** user data from a Databunker Pro instance while keeping its configuration (tenants, roles, policies, encryption keys, license) intact. It is intended for resetting a **test**, **staging**, or **to-be-decommissioned** instance.
+
+<Warning>
+This operation is destructive and irreversible. It deletes every user across **all tenants** — the SQL `TRUNCATE` command ignores row-level security, so it cannot be limited to a single tenant. Never run it against a production database. Take a backup first.
+</Warning>
+
+## Background
+
+A user in Databunker Pro is identified by a UUID **token**. Beyond the main `users` table, the same token (or, for a few tables, the `usertoken` / `record` column) links a user to several auxiliary tables. A full cleanup must clear all of them:
+
+| Table | User column | Contents |
+| --- | --- | --- |
+| `users` | `token` | Main encrypted user profile |
+| `userapps` | `token` | Per-user app records |
+| `userappversions` | `token` | App record version history |
+| `userversions` | `token` | User profile version history |
+| `usergroups` | `token` | Group memberships |
+| `sessions` | `token` | User sessions |
+| `sharedrecords` | `token` | Shared-record grants |
+| `requests` | `token` | Data-subject requests |
+| `agreements` | `token` | Consent / legal-basis agreements |
+| `xtokens` | `usertoken` | Per-user access tokens (only rows where `usertoken` is set — see below) |
+| `audit` | `record` | Audit events for the user |
+
+The tokenization vault (`tokens`) is **not** keyed by user token and is left out by default — see [Tokenization vault](#tokenization-vault) below.
+
+## Before you start
+
+- Direct (`psql`) access to the PostgreSQL database backing Databunker Pro.
+- A recent backup.
+
+## Truncate all user tables
+
+Run the following statements. `RESTART IDENTITY` resets the auto-increment sequences (only `usergroups` actually uses one) so a fresh instance starts clean.
+
+```sql
+TRUNCATE TABLE users RESTART IDENTITY;
+TRUNCATE TABLE userapps RESTART IDENTITY;
+TRUNCATE TABLE userappversions RESTART IDENTITY;
+TRUNCATE TABLE userversions RESTART IDENTITY;
+TRUNCATE TABLE usergroups RESTART IDENTITY;
+TRUNCATE TABLE sessions RESTART IDENTITY;
+TRUNCATE TABLE sharedrecords RESTART IDENTITY;
+TRUNCATE TABLE requests RESTART IDENTITY;
+TRUNCATE TABLE agreements RESTART IDENTITY;
+DELETE FROM xtokens WHERE usertoken IS NOT NULL AND usertoken::text <> '';
+TRUNCATE TABLE audit RESTART IDENTITY;
+```
+
+`TRUNCATE` empties the tables in a single fast operation and reclaims disk space immediately, so a follow-up `VACUUM` is not required.
+
+<Warning>
+Do **not** `TRUNCATE` the `xtokens` table. It holds the **root** and **role** access tokens (rows where `usertoken` is `NULL`) alongside the per-user login tokens. Wiping it would invalidate the root token and lock you out of the API. Delete only the rows that belong to a user with `DELETE FROM xtokens WHERE usertoken IS NOT NULL AND usertoken::text <> '';`, as shown above — this preserves the root and role tokens.
+</Warning>
+
+<Note>
+`TRUNCATE` ignores row-level security, so it always clears every tenant regardless of the `my.tenantid` session setting. If you need to remove the users of a single tenant only, delete by `tenantid` with `DELETE` statements instead of truncating.
+</Note>
+
+## Tokenization vault
+
+If you use [tokenization](/pro/concepts/tokenization), a user's sensitive fields may be stored in the `tokens` vault. This table is **not** keyed by the user token, so it is intentionally excluded above to avoid breaking tokens that are still referenced elsewhere. Truncate it only if you want to erase the entire vault as part of a full reset:
+
+```sql
+-- Empties the tokenization vault. It is RANGE-partitioned;
+-- truncating the parent cascades to tokens_p0..p240.
+TRUNCATE TABLE tokens RESTART IDENTITY;
+```
+
+## What is preserved
+
+The following configuration tables are **not** touched, so the instance stays usable after the cleanup: `tenants`, `config` (including the license key), `encryptionkeys`, `policies`, `roles`, `rolepolicies`, `groups`, `connectors`, `legalbasis`, and `processingactivities`.

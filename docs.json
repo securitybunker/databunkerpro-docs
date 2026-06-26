@@ -46,6 +46,14 @@
                 ]
               },
               {
+                "group": "How-tos",
+                "pages": [
+                  "pro/howtos/overview",
+                  "pro/howtos/update-license",
+                  "pro/howtos/clean-users-table"
+                ]
+              },
+              {
                 "group": "Concepts",
                 "pages": [
                   "pro/concepts/tokenization",
