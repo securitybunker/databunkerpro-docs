@@ -25,8 +25,8 @@ A user in Databunker Pro is identified by a UUID **token**. Beyond the main `use
 | `sharedrecords` | `token` | Shared-record grants |
 | `requests` | `token` | Data-subject requests |
 | `agreements` | `token` | Consent / legal-basis agreements |
-| `xtokens` | `usertoken` | Per-user access tokens (only rows where `usertoken` is set — see below) |
 | `audit` | `record` | Audit events for the user |
+| `xtokens` | `usertoken` | Per-user access tokens (only rows where `usertoken` is set — see below) |
 
 The tokenization vault (`tokens`) is **not** keyed by user token and is left out by default — see [Tokenization vault](#tokenization-vault) below.
 
@@ -49,8 +49,8 @@ TRUNCATE TABLE sessions RESTART IDENTITY;
 TRUNCATE TABLE sharedrecords RESTART IDENTITY;
 TRUNCATE TABLE requests RESTART IDENTITY;
 TRUNCATE TABLE agreements RESTART IDENTITY;
-DELETE FROM xtokens WHERE usertoken IS NOT NULL AND usertoken::text <> '';
 TRUNCATE TABLE audit RESTART IDENTITY;
+DELETE FROM xtokens WHERE usertoken IS NOT NULL AND usertoken::text <> '';
 ```
 
 `TRUNCATE` empties the tables in a single fast operation and reclaims disk space immediately, so a follow-up `VACUUM` is not required.
