@@ -46,14 +46,6 @@
                 ]
               },
               {
-                "group": "How-tos",
-                "pages": [
-                  "pro/howtos/overview",
-                  "pro/howtos/update-license",
-                  "pro/howtos/clean-users-table"
-                ]
-              },
-              {
                 "group": "Concepts",
                 "pages": [
                   "pro/concepts/tokenization",
@@ -71,6 +63,14 @@
                   "pro/comparisons/aws-cognito-alternative",
                   "pro/comparisons/hashicorp-vault-alternative",
                   "pro/comparisons/custom-solution-alternative"
+                ]
+              },
+              {
+                "group": "How-tos",
+                "pages": [
+                  "pro/howtos/overview",
+                  "pro/howtos/update-license",
+                  "pro/howtos/clean-users-table"
                 ]
               },
               {
