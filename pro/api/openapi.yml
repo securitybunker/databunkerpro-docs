@@ -1542,6 +1542,245 @@ paths:
                     description: UUID of the update request
 
   # ========================================
+  # FILE STORAGE
+  # ========================================
+  /v2/FileCreate:
+    post:
+      summary: Store a file for a user
+      description: |
+        Stores an encrypted file for a user. The file content is supplied as a base64-encoded `filedata` field. Each file is encrypted with a per-file key (wrapped by the user's record key) and stored in the configured object-storage backend (local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage).
+
+        If the same content is uploaded again for the same user, the response sets `duplicate` to `true` and no new object is written.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, filename, filedata]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                filename:
+                  type: string
+                  description: Name of the file (1-255 characters)
+                filedata:
+                  type: string
+                  format: byte
+                  description: Base64-encoded file content
+                mimetype:
+                  type: string
+                  description: MIME type of the file. If omitted, it is auto-detected from the content.
+                slidingtime:
+                  type: string
+                  description: Sliding retention period for the file (e.g., '30d', '1y')
+                finaltime:
+                  type: string
+                  description: Absolute expiration time for the file (e.g., '90d', '2026-01-01')
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File stored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  fileuuid:
+                    type: string
+                    description: Unique identifier of the stored file
+                  duplicate:
+                    type: boolean
+                    description: True if the file content already existed for this user
+
+  /v2/FileGet:
+    post:
+      summary: Get a user file
+      description: |
+        Returns the decrypted content of a user file. The file is selected by `fileuuid` (preferred) or by `filename`. When selecting by `filename`, the most recently created file with that name is returned. At least one of `fileuuid` or `filename` is required.
+
+        By default the content is returned as a base64-encoded `filedata` field inside a JSON response. Set `raw` to `true` to receive the decrypted bytes directly with the appropriate `Content-Type` and `Content-Disposition` headers (useful for direct downloads).
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: Unique identifier of the file to retrieve (preferred)
+                filename:
+                  type: string
+                  description: Name of the file to retrieve (resolves to the most recent file with this name)
+                raw:
+                  type: boolean
+                  description: If true, return the raw decrypted bytes instead of a base64 JSON response
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  fileuuid:
+                    type: string
+                    description: Unique identifier of the file
+                  filename:
+                    type: string
+                    description: Name of the file
+                  mimetype:
+                    type: string
+                    description: MIME type of the file
+                  size:
+                    type: integer
+                    description: Size of the file in bytes
+                  filedata:
+                    type: string
+                    format: byte
+                    description: Base64-encoded file content
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Raw decrypted file content (returned when raw is true)
+
+  /v2/FileListUserFiles:
+    post:
+      summary: List user files
+      description: Retrieves the metadata of all files owned by a user. File content is not returned.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Files listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fileuuid:
+                          type: string
+                          description: Unique identifier of the file
+                        filename:
+                          type: string
+                          description: Name of the file
+                        mimetype:
+                          type: string
+                          description: MIME type of the file
+                        size:
+                          type: integer
+                          description: Size of the file in bytes
+                        doublehash:
+                          type: string
+                          description: Hex-encoded double hash of the file content
+                        creationtime:
+                          type: integer
+                          description: Creation time (Unix timestamp)
+
+  /v2/FileDelete:
+    post:
+      summary: Delete a user file
+      description: Removes a user file, deleting both the stored object and its metadata.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, fileuuid]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: Unique identifier of the file to delete
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+
+  # ========================================
   # LEGAL BASIS & AGREEMENT MANAGEMENT
   # ========================================
   /v2/LegalBasisCreate:
@@ -4107,6 +4346,8 @@ tags:
     description: Operations for creating, reading, updating, and deleting users
   - name: App Data Management
     description: Operations for managing application-specific user data
+  - name: File Storage
+    description: Operations for storing, retrieving, and deleting encrypted user files
   - name: Legal Basis Management
     description: Operations for managing legal basis for data processing
   - name: Agreement Management
