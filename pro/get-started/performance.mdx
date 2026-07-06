@@ -1,113 +1,165 @@
 ---
 title: Performance & benchmarks
 sidebarTitle: Performance
-description: Measured throughput, latency, and storage characteristics for Databunker Pro at scale, with notes on what the numbers mean for capacity planning and when to scale horizontally.
+description: Measured throughput, latency, and storage characteristics for Databunker Pro at scale on dedicated AWS RDS PostgreSQL, with notes on what the numbers mean for capacity planning and when to scale horizontally.
 ---
 
-This page documents measured Databunker Pro performance on a representative workload — a 120-field user-profile vault sized at 5 million records. It is intended as a starting point for capacity planning, not as a marketing benchmark; the numbers are produced from an internal performance run and the methodology is documented so you can reproduce or refine against your own payloads.
+This page documents measured Databunker Pro performance on a representative workload — a 120-field user-profile vault sized at **10 million records**, backed by a **dedicated AWS RDS PostgreSQL** database. It is intended as a starting point for capacity planning, not as a marketing benchmark; the numbers are produced from an internal performance run and the methodology is documented so you can reproduce or refine against your own payloads.
+
+<Note>
+This run uses a **dedicated managed PostgreSQL (AWS RDS)** separated from the application tier — the configuration we recommend for production. It supersedes an earlier 5 M run that co-located PostgreSQL on the application host; separating the database roughly **tripled** sustained write throughput (from ~1,700 to ~5,800 records/sec).
+</Note>
 
 ## Benchmark setup
 
 | Parameter           | Value                                                                |
 | ------------------- | -------------------------------------------------------------------- |
-| Workload            | `UserCreate` (PII tokenisation) — full user profiles                 |
+| Workload            | `UserCreateBulk` (PII tokenisation) — full user profiles             |
 | Profile shape       | 120 fields per profile (mixed PII + custom application fields)       |
-| Record count        | 5,000,000                                                            |
-| Host                | **AWS EC2 `m6i.2xlarge`** (8 vCPU Intel Ice Lake, 32 GB RAM)         |
-| Backend database    | PostgreSQL, **co-located on the same EC2 host**                      |
-| Databunker Pro      | Single instance, stateless application server (same host)            |
-| Load generator      | Python scripts from the [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) repo — [`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py) for writes and [`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_fetcher.py) for reads — running locally on the same host (no client-side network bottleneck) |
-| Write mode          | Bulk (`UserCreateBulk`) at **4,000 records per request**             |
+| Record count        | 10,000,000                                                           |
+| Application tier    | **AWS EC2 `m6i.2xlarge`** (8 vCPU Intel Ice Lake, 32 GB RAM), single stateless Databunker Pro instance |
+| Backend database    | **Dedicated AWS RDS PostgreSQL 16**, `db.m6i.2xlarge` (8 vCPU, 32 GB), 400 GB gp3 @ 12,000 IOPS / 500 MB/s |
+| Region / placement  | `eu-central-1`, application tier and RDS in the same VPC             |
+| Load generator      | Python scripts from the [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) repo, running co-located with Databunker Pro (no client-side network bottleneck); the only network hop measured is **App → RDS** |
+| Write mode          | Bulk (`UserCreateBulk`) at **4,000 records per request**, **8 concurrent workers** |
 | Indexing            | Default hashed indexes on `email`, `phone`, `login`, `custom`        |
 | Encryption          | AES-256 at rest, TLS in transit (defaults)                           |
-
-<Note>
-The numbers below were produced on a **modest single EC2 instance** with the database co-located. They are not the upper bound — separating the database onto a dedicated managed PostgreSQL service (e.g., Aurora) and scaling the application tier horizontally produces materially higher throughput.
-</Note>
 
 ## Measured throughput and latency
 
 | Metric                              | Value                                                                    |
 | ----------------------------------- | ------------------------------------------------------------------------ |
-| **Sustained bulk write throughput** | **~1,700 records/sec**                                                   |
-| Per-record amortised in a bulk      | **~0.6 ms**                                                              |
-| Per-bulk request latency            | **~2.4 seconds** for a 4,000-record bulk                                 |
-| Time to write 1,000,000 records     | **~10 minutes**                                                          |
-| Time to write 5,000,000 records     | **~50 minutes** — same per-million rate as 1 M (linear scaling)          |
-| Single-record sync write            | **3–10 ms** range over a real network                                    |
-| Detokenisation (`UserGet`)          | Hashed-index point lookup; faster than write (precise number tracked in follow-up benchmark) |
+| **Sustained bulk write throughput** | **~5,800 records/sec** (single Databunker Pro instance)                  |
+| Per-record amortised in a bulk      | **~0.17 ms**                                                             |
+| Time to write 1,000,000 records     | **~2.9 minutes**                                                         |
+| Time to write 10,000,000 records    | **~28.6 minutes** — linear, no per-million slowdown as the vault grows   |
+| Per-bulk request latency (p50)      | **~4.5 seconds** for a 4,000-record bulk (server-side encrypt + index + commit) |
+| Per-bulk request latency (p95 / p99)| ~5.8 s / ~15 s — tail latency under 8-way concurrent bulk load           |
+| Failed batches                      | **0** (of 2,500)                                                         |
+
+## Detokenisation (`UserGet`)
+
+Single-record synchronous point lookups by token (hashed-index), measured against the fully-loaded 10 M vault over the App → RDS network:
+
+| Metric                              | Value                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| **Detokenisation latency p50 / p95 / p99** | **~14 ms / ~15 ms / ~16 ms** per single-record `UserGet`          |
+| Single-instance read throughput     | ~660 reads/sec synchronous (one Databunker Pro instance, 16 concurrent clients) |
+
+Each `UserGet` is a full round trip — HTTP, auth, hashed-index lookup, row fetch, decryption — so latency is dominated by per-call overhead, not index depth (the index cache-hit ratio was **99.97%**, see below). Read **throughput** scales horizontally by adding Databunker Pro instances (the database was far from saturated — see [When to scale horizontally](#when-to-scale-horizontally)).
 
 ## Storage footprint
 
 | Metric                        | Value                                                                 |
 | ----------------------------- | --------------------------------------------------------------------- |
-| Total database size (5 M)     | **27 GB**                                                             |
-| Heap table (`users`)          | 832 MB                                                                |
-| Indexes                       | 655 MB                                                                |
-| Encrypted record TOAST        | ~25.5 GB (the bulk of the footprint — encrypted profile blobs)        |
-| **Per-record on disk**        | **~5.4 KB** per fully-encrypted 120-field profile, including indexes  |
+| Total database size (10 M)    | **58.5 GB**                                                           |
+| **Per-record on disk**        | **~5.7 KB** per fully-encrypted 120-field profile, including indexes  |
+| Encrypted record TOAST        | ~55.3 GB (the bulk of the footprint — encrypted profile blobs)        |
+| Heap (`users` table)          | 1.84 GB                                                               |
+| **Total indexes**             | **1.38 GB** (~138 bytes/record)                                       |
+| RAM to cache all indexes      | **~2 GB** — trivially held in RAM on any modern instance class        |
+| Index / heap cache-hit ratio  | **99.97% / 100%** — the working set is served from memory             |
 
 ## What the numbers mean
 
 ### For capacity planning
 
-- **~1,700 records/sec sustained on one instance** is more than enough for almost any single-organisation steady-state workload. A typical large enterprise serving 100,000 users only needs to ingest its full user base **once** in under a minute.
-- **Linear scaling 1 M → 5 M** means the vault doesn't slow down as it grows. Plan storage; don't plan throughput penalties.
-- **5.4 KB per encrypted 120-field record** — multiply by your expected record count to size your PostgreSQL volume. A 10-million-record deployment needs roughly 54 GB plus operational headroom.
+- **~5,800 records/sec sustained on one instance** ingests a 10-million-record user base in under half an hour. For steady-state operation this is far more than almost any single-organisation workload requires.
+- **Linear scaling to 10 M** means the vault doesn't slow down as it grows. Plan storage; don't plan throughput penalties.
+- **~5.7 KB per encrypted 120-field record** — multiply by your expected record count to size the PostgreSQL volume. 10 M ≈ 59 GB; 100 M ≈ 590 GB, plus operational headroom (WAL, autovacuum, backups).
+- **Indexes are tiny relative to data** (~138 bytes/record). Even at 100 M records that is only ~14 GB of indexes; size the database instance so **RAM comfortably exceeds total index size + hot working set** and detokenisation stays in memory. At 10 M the entire index (1.4 GB) sits in cache with a **99.97% hit ratio**.
+
+### The database was not the bottleneck
+
+During the write load the **dedicated RDS instance was lightly loaded** — the throughput ceiling was the single application instance, not the database:
+
+| Resource                         | During 10 M load                                        |
+| -------------------------------- | ------------------------------------------------------- |
+| RDS CPU                          | **~20% avg, ~33% peak**                                 |
+| RDS write IOPS                   | ~2,800 avg (of 12,000 provisioned)                      |
+| RDS write latency                | ~8 ms                                                   |
+| RDS freeable memory              | ~23 GB free                                             |
+| **Databunker Pro (app) CPU**     | **~3.2 of 8 cores** (encryption + hashing + indexing)   |
+
+The vault is **CPU-bound on the application tier** (AES-256 + hashed-index computation per record), while the database has substantial headroom. This is the key capacity-planning insight: **to increase write or read throughput, add Databunker Pro instances — the database is not the first thing you need to scale.**
 
 ### Bulk vs single-record latency
 
-The headline ~0.6 ms per record is **amortised inside a 4,000-record bulk request**. It includes network, auth, encryption, hashing, indexing, and transaction commit averaged across the batch. **Single-record synchronous writes will be higher** — 3–10 ms is typical over a real network — because each call carries its own connection, auth, and transaction overhead.
+The headline ~0.17 ms per record is **amortised inside a 4,000-record bulk request** across 8 concurrent workers. **Single-record synchronous writes will be higher** — typically 3–10 ms over a real network — because each call carries its own connection, auth, and transaction overhead. Plan accordingly:
 
-Plan accordingly:
-
-- **Backfills and batch flows**: use `UserCreateBulk` and assume ~0.6 ms per record.
-- **Real-time API flows**: assume 3–10 ms per single-record write. Throughput in production is then `(concurrency × 1 / per-call latency)` — i.e., 100 concurrent worker threads writing at 5 ms apiece gives 20,000 records/sec.
-
-### Why no detokenisation number yet?
-
-Detokenisation (`UserGet`) is a hashed-index point lookup, which is structurally faster than a write. Most internal runs put it well below the per-record write latency. We are documenting a precise number in a follow-up benchmark and will publish it here.
+- **Backfills and batch flows**: use `UserCreateBulk` and assume ~0.17 ms per record at this concurrency.
+- **Real-time API flows**: assume single-digit-millisecond single-record writes; production throughput is then `(concurrency × 1 / per-call latency)`.
 
 ## When to scale horizontally
 
-The application server is **stateless**, so horizontal scaling on Kubernetes is straightforward. Add instances when:
+The application server is **stateless**, so horizontal scaling on Kubernetes is straightforward: run multiple Databunker Pro instances, all sharing the **same wrapping key** and the **same PostgreSQL database**. Because this benchmark showed the single instance CPU-bound while RDS idled at ~20%, adding instances is the direct lever for higher aggregate throughput — up to the point where the shared database becomes the bottleneck.
 
-- The PostgreSQL backend is healthy and CPU-headroom on the application pod is exhausted (vault is CPU-bound on encryption + indexing under heavy bulk load).
+Add instances when:
+
+- The application pod is CPU-bound on encryption + indexing under heavy load (as here), and the database still has CPU/IOPS headroom.
 - You need geographic locality — see [Multi-jurisdiction deployment](/pro/concepts/global-deployment).
 - You want isolation between workload classes (e.g., dedicate one instance to batch jobs, another to real-time API).
 
-The backend database is usually the eventual bottleneck before the application server. Use **AWS Aurora PostgreSQL Auto-Scaling** (or equivalent on Azure / GCP) for production deployments — this lifts the typical wall-clock bottleneck.
+Use **AWS RDS or Aurora PostgreSQL** (or the managed equivalent on Azure / GCP) for the backend, and scale it up (or enable Aurora storage auto-scaling) once the database — rather than the application tier — becomes the wall-clock bottleneck.
+
+### Measured multi-instance scaling curve
+
+We ran **N Databunker Pro instances** (each a separate EC2 host running a load generator, all sharing the **same wrapping key** and the **same RDS `db.m6i.2xlarge` database**) and measured aggregate `UserCreateBulk` throughput. (Redis holds only transient session state and is not exercised by bulk writes; a production deployment would point all instances at a shared Redis cluster.)
+
+| Databunker Pro instances | Aggregate write throughput | Per-instance throughput | Scaling efficiency | RDS CPU (avg / peak) |
+| ------------------------ | -------------------------- | ----------------------- | ------------------ | -------------------- |
+| 1                        | ~5,400 records/sec         | ~5,400 records/sec      | baseline           | 23% / 33%            |
+| 2                        | ~11,500 records/sec        | ~5,770 records/sec      | ~100% (linear)     | 24% / 31%            |
+| 4                        | ~23,200 records/sec        | ~5,800 records/sec      | ~100% (linear)     | 40% / 47%            |
+| 6                        | **~34,400 records/sec**    | ~5,730 records/sec      | ~100% (linear)     | 40% / 52%            |
+
+**Throughput scaled linearly** — per-instance throughput stayed flat at ~5,700–5,800 records/sec with no measurable database contention, so **6 instances delivered ~6× the single-instance rate (~34,400 records/sec)**. Crucially, the shared RDS instance was still only **~40% CPU (52% peak)** at 6 instances — it was nowhere near saturation. Extrapolating the ~8–9% CPU cost per instance, this single mid-range RDS class would support on the order of **10–12 Databunker Pro instances (~60,000 records/sec)** before the database becomes the bottleneck.
+
+**How many instances do you need?** Size the application tier to your target rate at **~5,700 records/sec per instance**, and scale the database only once it — not the app tier — approaches its CPU/IOPS ceiling. For most workloads, one Databunker Pro instance is already more than enough; horizontal scaling is there for extreme backfill or high-concurrency real-time throughput.
+
+## Scale summary
+
+| Records   | DB size | Per-record | Sustained write (1 instance) | Detok p50 | Status        |
+| --------- | ------- | ---------- | ---------------------------- | --------- | ------------- |
+| 10 M      | 58.5 GB | ~5.7 KB    | ~5,800 rec/sec               | ~14 ms    | **measured**  |
+| 50 M      | —       | —          | —                            | —         | planned       |
+| 100 M     | —       | —          | —                            | —         | planned       |
+| 150 M     | —       | —          | —                            | —         | planned       |
+| 200 M     | —       | —          | —                            | —         | planned       |
 
 ## Running your own benchmark
 
 The numbers above are a starting point. Real workloads vary by:
 
-- **Payload size** — a 12-field profile tokenises faster than a 120-field profile; a 1 KB profile differs from a 10 KB profile.
+- **Payload size** — a 12-field profile tokenises faster than a 120-field profile.
 - **Search-index field count** — each hashed index adds a small per-record cost.
 - **Access-control policy depth** — CRBAC evaluation on reads scales with policy complexity.
-- **Database backend choice and sizing** — PostgreSQL vs MySQL, instance class, IOPS, network latency to the DB.
+- **Database backend choice and sizing** — instance class, provisioned IOPS, and network latency to the DB.
 
-To reproduce or refine for your context, start from the open-source Python load scripts we used:
+To reproduce or refine for your context, start from the open-source Python load scripts:
 
-- **[`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py)** — drives `UserCreateBulk` to generate and tokenise a configurable number of user profiles. This is the script that produced the bulk-write numbers above.
+- **[`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py)** — drives `UserCreateBulk` to generate and tokenise a configurable number of user profiles.
 - **[`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_fetcher.py)** — drives `UserGet` to retrieve previously-tokenised records, for measuring detokenisation throughput and latency.
 
-Both scripts are in the official [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) SDK repo and are designed to be edited — adjust the profile shape, batch size, and concurrency to match your workload.
+Both are in the official [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) SDK repo and are designed to be edited — adjust the profile shape, batch size, and concurrency to match your workload.
 
 ### Steps
 
-1. Adjust the profile shape in `bulk_user_creator.py` to match the actual JSON your application sends.
-2. Pre-warm the backend database (vacuum, statistics).
-3. Run `bulk_user_creator.py` co-located with the Databunker Pro instance to remove client-side network noise.
-4. Measure: sustained records/sec, p50 / p95 / p99 per-bulk latency, database CPU and IOPS.
-5. Run `bulk_user_fetcher.py` against the same vault to capture `UserGet` performance.
+1. Provision a dedicated managed PostgreSQL (RDS/Aurora/Cloud SQL) and a separate application host in the same VPC.
+2. Adjust the profile shape in `bulk_user_creator.py` to match the actual JSON your application sends.
+3. Run the loader **co-located with Databunker Pro** to remove client-side network noise; use multiple concurrent workers.
+4. Measure: sustained records/sec, p50 / p95 / p99 per-bulk latency, database CPU and IOPS, and **application-tier CPU** (the likely bottleneck).
+5. Run `bulk_user_fetcher.py` against the same vault to capture `UserGet` latency and throughput.
 
 Contact us through [office@databunkertech.com](mailto:office@databunkertech.com) if you would like the professional services team to design and run a benchmark against your representative payloads as part of an engagement.
 
+## Scope
+
+This benchmark exercises the **PII vault write path** (`UserCreateBulk`) and the **detokenisation read path** (`UserGet`). It does **not** cover the secure **session-storage API**, format-preserving token operations, or agreement/legal-basis flows — those have different performance characteristics and are measured separately.
+
 ## What we'll add next
 
-- Precise detokenisation latency numbers (`UserGet` p50 / p95 / p99).
-- Multi-instance horizontal-scaling curve (records/sec per added pod).
+- 50 M → 200 M record scaling iterations (throughput, storage, and RAM guidance per tier).
+- Secure session-storage API throughput and latency.
 - Format-preserving tokenisation throughput (`TokenCreate` / `TokenCreateBulk`).
 - MySQL backend comparison.
-- Cold-cache vs warm-cache `UserGet` profile.

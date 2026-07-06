@@ -78,7 +78,7 @@ sidebarTitle: FAQ
 
 ### Is the tokenization system scalable to support large transaction volumes (e.g., millions of transactions per day)? What are the performance benchmarks?
 
-Yes. Databunker Pro is built in Go on a stateless, horizontally-scalable architecture. A recent internal benchmark on a single AWS EC2 `m6i.2xlarge` (5,000,000 records, 120-field user profiles, co-located PostgreSQL) sustained **~1,700 records/sec** on bulk writes with linear scaling from 1 M to 5 M records.
+Yes. Databunker Pro is built in Go on a stateless, horizontally-scalable architecture. A recent internal benchmark — a single Databunker Pro instance on AWS EC2 `m6i.2xlarge` backed by a **dedicated AWS RDS PostgreSQL** database (10,000,000 records, 120-field user profiles) — sustained **~5,800 records/sec** on bulk writes with linear scaling, ingesting 10 M records in ~28 minutes. Detokenisation (`UserGet`) ran at ~14 ms p50. The database stayed lightly loaded (~20% CPU), and throughput **scales linearly by adding stateless Databunker Pro instances** against the same database — a 6-instance test reached **~34,400 records/sec** with the shared RDS still only ~40% utilised.
 
 For the full benchmark methodology, latency / throughput / storage numbers, and capacity-planning guidance, see [Performance & benchmarks](/pro/get-started/performance).
 
