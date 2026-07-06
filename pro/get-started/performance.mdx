@@ -89,7 +89,9 @@ The throughput ceiling **moves as the vault grows**, so the right thing to scale
 | RDS write IOPS                   | ~8,900 avg                                              |
 | Aggregate write throughput       | ~11,800 rec/sec (**~2,900/instance**, down from ~5,800 solo) |
 
-**Capacity-planning takeaway:** at small scale, add Databunker Pro instances to raise throughput — the database has headroom. At large scale (tens of millions of rows) with concurrent bulk writers, **index-maintenance CPU on the database becomes the bottleneck**, so scale up the RDS/Aurora instance (more vCPU + RAM) rather than adding more app nodes. See the [sizing guide](#recommended-sizing-by-record-count).
+**At 100 M records (5 instances, `db.m6i.8xlarge` — 2× the vCPU)** the throughput was **~11,900 rec/sec** — essentially identical to the 50 M run, at ~82% avg / 95% peak RDS CPU. Doubling the database's vCPU didn't raise throughput because per-insert CPU cost had also roughly doubled (the index is 2× larger). In other words, **sustained bulk-write throughput plateaus around ~12,000 rec/sec** in this DB-bound regime — to push past it you need database vCPU to grow *faster* than the table.
+
+**Capacity-planning takeaway:** at small scale, add Databunker Pro instances to raise throughput — the database has headroom. At large scale (tens of millions of rows) with concurrent bulk writers, **index-maintenance CPU on the database is the bottleneck** and sustained bulk throughput plateaus (~12K rec/s here) — so size the RDS/Aurora instance for your **row count** (vCPU + RAM), not just add app nodes. Bulk **backfills** of very large vaults are database-bound and take hours (100 M ≈ ~2.3 h here); size accordingly. See the [sizing guide](#recommended-sizing-by-record-count).
 
 ### Bulk vs single-record latency
 
@@ -135,7 +137,7 @@ This curve was measured with short 500K-record bursts, where inserts land in **s
 | --------- | -------- | ---------- | ------- | -------------------------- | ------------- |
 | 10 M      | 58.5 GB  | ~5.7 KB    | 1.4 GB  | ~5,800 rec/sec (1 node, app-bound) | **measured** |
 | 50 M      | 292 GB   | ~5.7 KB    | 6.9 GB  | ~11,800 rec/sec (4 nodes, DB-bound ~80% CPU) | **measured** |
-| 100 M     | ~585 GB  | ~5.7 KB    | ~14 GB  | DB-CPU-bound (scale RDS)    | projected     |
+| 100 M     | 584 GB   | ~5.7 KB    | 13.9 GB | ~11,900 rec/sec (5 nodes, DB-bound ~82% CPU) | **measured** |
 | 150 M     | ~875 GB  | ~5.7 KB    | ~21 GB  | DB-CPU-bound (scale RDS)    | projected     |
 | 200 M     | ~1.17 TB | ~5.7 KB    | ~28 GB  | DB-CPU-bound (scale RDS/Aurora) | projected  |
 
@@ -147,14 +149,14 @@ Derived from the measured 10 M and 50 M runs. Storage is linear at **~5.7 KB/rec
 | ------------ | ------------ | ----------------- | -------------------- | --------- | ----- |
 | ≤ 10 M   | `db.m6i.2xlarge` (8 vCPU / 32 GB)  | 150 GB   | ~2 GB (of 32)   | 1 × `m6i.2xlarge`   | App-bound; RDS ~20% CPU; ~5,800 rec/s. **(measured)** |
 | 10–50 M  | `db.m6i.4xlarge` (16 vCPU / 64 GB) | 500 GB   | ~7 GB (of 64)   | 2–4 × `m6i.2xlarge` | 4 nodes saturate RDS (~80% CPU, ~11,800 rec/s); use 2–3 for headroom. **(measured @ 50 M)** |
-| 50–100 M | `db.r6i.4xlarge` (16 vCPU / 128 GB)| 800 GB   | ~14 GB (of 128) | 2–4 × `m6i.2xlarge` | Extra RAM caches the larger index; expect DB-CPU-bound under heavy load. *(projected)* |
+| 50–100 M | `db.m6i.8xlarge` (32 vCPU / 128 GB)| 1 TB     | ~14 GB (of 128) | 5 × `m6i.2xlarge`   | Measured @ 100 M: ~11,900 rec/s, RDS ~82% avg / 95% peak CPU (even 5 nodes saturate it as the table grows). **(measured @ 100 M)** |
 | 100–150 M| `db.r6i.8xlarge` (32 vCPU / 256 GB)| 1.1 TB   | ~21 GB (of 256) | 3–4 × `m6i.2xlarge` | More vCPU for index-maintenance CPU; RAM holds the full index. *(projected)* |
 | 150–200 M| `db.r6i.8xlarge` or **Aurora PostgreSQL** | 1.3–1.5 TB | ~28 GB | 4–6 × `m6i.2xlarge` | Consider Aurora for storage auto-scaling + read replicas to offload detokenisation. *(projected)* |
 
 **Rules of thumb**
 
 - **Storage** ≈ 5.7 KB × records, plus **30–40% headroom** for WAL, bloat, and backups.
-- **Memory (indexes)** ≈ 139 bytes × records — size the DB instance so RAM comfortably **exceeds total index size + hot rows** so detokenisation stays in cache (index cache-hit was 99.97% at 10 M, 97.5% at 50 M). E.g. 100 M ≈ 14 GB of index → a ≥64 GB-RAM instance; 200 M ≈ 28 GB → ≥128 GB.
+- **Memory (indexes)** ≈ 139 bytes × records — size the DB instance so RAM comfortably **exceeds total index size + hot rows** so detokenisation stays in cache (measured index cache-hit: 99.97% at 10 M, 97.5% at 50 M, 97.6% at 100 M). Measured: 100 M = 13.9 GB of index, fully cached on a 128 GB instance. Plan ~28 GB of index at 200 M → ≥128 GB RAM.
 - **Database vCPU** is the sustained-write limiter at scale — size it up (or move to Aurora) before adding app nodes once RDS passes ~70% CPU.
 
 ## Running your own benchmark
@@ -189,7 +191,7 @@ This benchmark exercises the **PII vault write path** (`UserCreateBulk`) and the
 
 ## What we'll add next
 
-- 100 M → 200 M record scaling iterations (to replace the projected sizing rows with measured numbers).
+- 150 M → 200 M record scaling iterations (to replace the remaining projected sizing rows with measured numbers).
 - Secure session-storage API throughput and latency.
 - Format-preserving tokenisation throughput (`TokenCreate` / `TokenCreateBulk`).
 - MySQL backend comparison.
