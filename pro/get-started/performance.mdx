@@ -69,19 +69,27 @@ Each `UserGet` is a full round trip — HTTP, auth, hashed-index lookup, row fet
 - **~5.7 KB per encrypted 120-field record** — multiply by your expected record count to size the PostgreSQL volume. 10 M ≈ 59 GB; 100 M ≈ 590 GB, plus operational headroom (WAL, autovacuum, backups).
 - **Indexes are tiny relative to data** (~138 bytes/record). Even at 100 M records that is only ~14 GB of indexes; size the database instance so **RAM comfortably exceeds total index size + hot working set** and detokenisation stays in memory. At 10 M the entire index (1.4 GB) sits in cache with a **99.97% hit ratio**.
 
-### The database was not the bottleneck
+### Where the bottleneck is: app tier at small scale, database at large scale
 
-During the write load the **dedicated RDS instance was lightly loaded** — the throughput ceiling was the single application instance, not the database:
+The throughput ceiling **moves as the vault grows**, so the right thing to scale changes with it.
 
-| Resource                         | During 10 M load                                        |
+**At 10 M records (single instance)** the database was lightly loaded and the application tier was the limit:
+
+| Resource                         | During 10 M load (1 instance)                           |
 | -------------------------------- | ------------------------------------------------------- |
 | RDS CPU                          | **~20% avg, ~33% peak**                                 |
 | RDS write IOPS                   | ~2,800 avg (of 12,000 provisioned)                      |
-| RDS write latency                | ~8 ms                                                   |
-| RDS freeable memory              | ~23 GB free                                             |
 | **Databunker Pro (app) CPU**     | **~3.2 of 8 cores** (encryption + hashing + indexing)   |
 
-The vault is **CPU-bound on the application tier** (AES-256 + hashed-index computation per record), while the database has substantial headroom. This is the key capacity-planning insight: **to increase write or read throughput, add Databunker Pro instances — the database is not the first thing you need to scale.**
+**At 50 M records (4 concurrent instances)** the picture inverts. Sustained inserts into 50-million-row indexes are far more CPU-expensive on the database (deeper B-trees, page splits, WAL, autovacuum), so the **database** became the ceiling:
+
+| Resource                         | During 50 M load (4 instances, `db.m6i.4xlarge`)        |
+| -------------------------------- | ------------------------------------------------------- |
+| **RDS CPU**                      | **~80% avg, ~95% peak**                                 |
+| RDS write IOPS                   | ~8,900 avg                                              |
+| Aggregate write throughput       | ~11,800 rec/sec (**~2,900/instance**, down from ~5,800 solo) |
+
+**Capacity-planning takeaway:** at small scale, add Databunker Pro instances to raise throughput — the database has headroom. At large scale (tens of millions of rows) with concurrent bulk writers, **index-maintenance CPU on the database becomes the bottleneck**, so scale up the RDS/Aurora instance (more vCPU + RAM) rather than adding more app nodes. See the [sizing guide](#recommended-sizing-by-record-count).
 
 ### Bulk vs single-record latency
 
@@ -113,19 +121,41 @@ We ran **N Databunker Pro instances** (each a separate EC2 host running a load g
 | 4                        | ~23,200 records/sec        | ~5,800 records/sec      | ~100% (linear)     | 40% / 47%            |
 | 6                        | **~34,400 records/sec**    | ~5,730 records/sec      | ~100% (linear)     | 40% / 52%            |
 
-**Throughput scaled linearly** — per-instance throughput stayed flat at ~5,700–5,800 records/sec with no measurable database contention, so **6 instances delivered ~6× the single-instance rate (~34,400 records/sec)**. Crucially, the shared RDS instance was still only **~40% CPU (52% peak)** at 6 instances — it was nowhere near saturation. Extrapolating the ~8–9% CPU cost per instance, this single mid-range RDS class would support on the order of **10–12 Databunker Pro instances (~60,000 records/sec)** before the database becomes the bottleneck.
+**Throughput scaled linearly** — per-instance throughput stayed flat at ~5,700–5,800 records/sec, so **6 instances delivered ~6× the single-instance rate (~34,400 records/sec)**, with the shared RDS still only **~40% CPU** at 6 instances.
 
-**How many instances do you need?** Size the application tier to your target rate at **~5,700 records/sec per instance**, and scale the database only once it — not the app tier — approaches its CPU/IOPS ceiling. For most workloads, one Databunker Pro instance is already more than enough; horizontal scaling is there for extreme backfill or high-concurrency real-time throughput.
+<Warning>
+This curve was measured with short 500K-record bursts, where inserts land in **small** indexes. It proves the stateless app tier scales cleanly, but it **overstates sustained headroom**. A separate **50 M** run (4 instances writing 12.5 M each into one growing table) showed that inserts into large, tens-of-millions-of-rows indexes cost far more database CPU: RDS saturated at **~80% CPU** and aggregate throughput was only **~11,800 records/sec (~2,900/instance)** — not the ~23,000 the burst curve predicts for 4 instances. Treat the linear curve as the *small-table* upper bound; at large row counts the **database CPU** saturates at a much lower instance count. See [Where the bottleneck is](#where-the-bottleneck-is-app-tier-at-small-scale-database-at-large-scale).
+</Warning>
+
+**How many instances do you need?** At small scale, size the app tier to your target rate at ~5,700 records/sec per instance. At large scale, the database saturates first — add app nodes only until RDS reaches ~70% CPU, then scale the **database** (bigger instance / Aurora). For most workloads a single instance is already more than enough. Use the [sizing guide](#recommended-sizing-by-record-count) below to pick DB and node sizes by record count.
 
 ## Scale summary
 
-| Records   | DB size | Per-record | Sustained write (1 instance) | Detok p50 | Status        |
-| --------- | ------- | ---------- | ---------------------------- | --------- | ------------- |
-| 10 M      | 58.5 GB | ~5.7 KB    | ~5,800 rec/sec               | ~14 ms    | **measured**  |
-| 50 M      | —       | —          | —                            | —         | planned       |
-| 100 M     | —       | —          | —                            | —         | planned       |
-| 150 M     | —       | —          | —                            | —         | planned       |
-| 200 M     | —       | —          | —                            | —         | planned       |
+| Records   | DB size  | Per-record | Indexes | Sustained write            | Status        |
+| --------- | -------- | ---------- | ------- | -------------------------- | ------------- |
+| 10 M      | 58.5 GB  | ~5.7 KB    | 1.4 GB  | ~5,800 rec/sec (1 node, app-bound) | **measured** |
+| 50 M      | 292 GB   | ~5.7 KB    | 6.9 GB  | ~11,800 rec/sec (4 nodes, DB-bound ~80% CPU) | **measured** |
+| 100 M     | ~585 GB  | ~5.7 KB    | ~14 GB  | DB-CPU-bound (scale RDS)    | projected     |
+| 150 M     | ~875 GB  | ~5.7 KB    | ~21 GB  | DB-CPU-bound (scale RDS)    | projected     |
+| 200 M     | ~1.17 TB | ~5.7 KB    | ~28 GB  | DB-CPU-bound (scale RDS/Aurora) | projected  |
+
+## Recommended sizing by record count
+
+Derived from the measured 10 M and 50 M runs. Storage is linear at **~5.7 KB/record**; indexes at **~139 bytes/record**; database CPU cost per insert **rises with table size**, so the DB instance is the throughput limiter at scale. App nodes are stateless `m6i.2xlarge` (Databunker Pro uses ~3 vCPU at full load) — add nodes to raise load throughput only until the database reaches ~70% CPU.
+
+| User records | RDS instance | RDS storage (gp3) | RAM to cache indexes | App nodes | Notes |
+| ------------ | ------------ | ----------------- | -------------------- | --------- | ----- |
+| ≤ 10 M   | `db.m6i.2xlarge` (8 vCPU / 32 GB)  | 150 GB   | ~2 GB (of 32)   | 1 × `m6i.2xlarge`   | App-bound; RDS ~20% CPU; ~5,800 rec/s. **(measured)** |
+| 10–50 M  | `db.m6i.4xlarge` (16 vCPU / 64 GB) | 500 GB   | ~7 GB (of 64)   | 2–4 × `m6i.2xlarge` | 4 nodes saturate RDS (~80% CPU, ~11,800 rec/s); use 2–3 for headroom. **(measured @ 50 M)** |
+| 50–100 M | `db.r6i.4xlarge` (16 vCPU / 128 GB)| 800 GB   | ~14 GB (of 128) | 2–4 × `m6i.2xlarge` | Extra RAM caches the larger index; expect DB-CPU-bound under heavy load. *(projected)* |
+| 100–150 M| `db.r6i.8xlarge` (32 vCPU / 256 GB)| 1.1 TB   | ~21 GB (of 256) | 3–4 × `m6i.2xlarge` | More vCPU for index-maintenance CPU; RAM holds the full index. *(projected)* |
+| 150–200 M| `db.r6i.8xlarge` or **Aurora PostgreSQL** | 1.3–1.5 TB | ~28 GB | 4–6 × `m6i.2xlarge` | Consider Aurora for storage auto-scaling + read replicas to offload detokenisation. *(projected)* |
+
+**Rules of thumb**
+
+- **Storage** ≈ 5.7 KB × records, plus **30–40% headroom** for WAL, bloat, and backups.
+- **Memory (indexes)** ≈ 139 bytes × records — size the DB instance so RAM comfortably **exceeds total index size + hot rows** so detokenisation stays in cache (index cache-hit was 99.97% at 10 M, 97.5% at 50 M). E.g. 100 M ≈ 14 GB of index → a ≥64 GB-RAM instance; 200 M ≈ 28 GB → ≥128 GB.
+- **Database vCPU** is the sustained-write limiter at scale — size it up (or move to Aurora) before adding app nodes once RDS passes ~70% CPU.
 
 ## Running your own benchmark
 
@@ -159,7 +189,7 @@ This benchmark exercises the **PII vault write path** (`UserCreateBulk`) and the
 
 ## What we'll add next
 
-- 50 M → 200 M record scaling iterations (throughput, storage, and RAM guidance per tier).
+- 100 M → 200 M record scaling iterations (to replace the projected sizing rows with measured numbers).
 - Secure session-storage API throughput and latency.
 - Format-preserving tokenisation throughput (`TokenCreate` / `TokenCreateBulk`).
 - MySQL backend comparison.
