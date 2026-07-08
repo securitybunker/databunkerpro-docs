@@ -23,7 +23,11 @@ Unattended installation is three HTTP calls against the Databunker Pro service:
 2. **`GET /dbstatus`** — check whether setup is still required (`{"installed": false}`).
 3. **`POST /autoinstall`** — perform the setup and return the credentials.
 
-After a successful `/autoinstall`, the setup endpoint shuts down and the container **restarts in normal operational mode**. The step is **idempotent**: if the database is already installed, skip it.
+<Note>
+**Setup endpoints are ephemeral.** While the vault is not yet installed, Databunker Pro runs a small **setup server** that hosts `/dbstatus`, `/setup`, and `/autoinstall`. As soon as setup completes, that server shuts down and the container **restarts in normal operational mode** — where only the regular API (`/status`, `/v2/*`) is served and **`/dbstatus` returns `404`**. That 404 is expected: it means the vault is already installed. (`/dbstatus` only ever returns a boolean `installed` flag — no sensitive data.)
+</Note>
+
+Because of this, make your installer **idempotent**: run `/autoinstall` **only** when `/dbstatus` explicitly returns `installed: false`. Treat a `404`, a connection error, or any other response as **"already installed — skip."**
 
 ## Enable the setup endpoint
 
@@ -54,7 +58,7 @@ until curl -fsS http://localhost:3000/status >/dev/null; do sleep 2; done
 curl -s http://localhost:3000/dbstatus
 ```
 
-A response of `{"status":"ok","installed":false}` means setup is needed. If `installed` is `true` (or the endpoint is gone once running normally), the vault is already installed — **stop here**.
+Only `{"status":"ok","installed":false}` means setup is needed. Any other outcome — `installed: true`, a **`404`** (the setup server has already shut down), or a connection error — means the vault is already installed, so **skip `/autoinstall`**.
 </Step>
 
 <Step title="Run autoinstall">
@@ -95,8 +99,15 @@ for _ in range(30):
         pass
     time.sleep(2)
 
-# 2. install only if not already installed (idempotent)
-if requests.get(f"{BASE}/dbstatus", timeout=10).json().get("installed") is False:
+# 2. install only if the vault explicitly reports installed=false (idempotent).
+#    A 404 / error means the setup server is gone -> already installed -> skip.
+def needs_install() -> bool:
+    try:
+        return requests.get(f"{BASE}/dbstatus", timeout=10).json().get("installed") is False
+    except Exception:
+        return False
+
+if needs_install():
     body = {"setupkey": SETUPKEY}
     if LICENSEKEY:
         body["licensekey"] = LICENSEKEY
@@ -104,6 +115,8 @@ if requests.get(f"{BASE}/dbstatus", timeout=10).json().get("installed") is False
     assert resp.get("status") == "ok" and resp.get("root_token"), resp
     # 3. persist resp securely — see next step
     save_credentials(resp)
+else:
+    print("Databunker Pro already installed — skipping autoinstall")
 ```
 
 </Tab>
