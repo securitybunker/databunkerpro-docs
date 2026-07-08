@@ -1,0 +1,170 @@
+---
+title: Unattended installation
+sidebarTitle: Unattended install
+description: Complete the Databunker Pro first-time setup automatically over the API — no browser required — for CI/CD, infrastructure-as-code, and reproducible deployments.
+---
+
+The [browser-based setup](/pro/installation/generate-admin-credentials) is the easiest way to install Databunker Pro by hand. For automated, repeatable deployments — CI/CD pipelines, infrastructure-as-code, container orchestration — Databunker Pro exposes a **`POST /autoinstall`** endpoint that performs the same first-time setup **without a browser**.
+
+This guide shows how to complete the install programmatically and capture the generated credentials.
+
+## Before you start
+
+- Databunker Pro **deployed** (see [Docker Compose](/pro/installation/docker-compose) or [Kubernetes / Helm](/pro/installation/kubernetes-helm)).
+- The **`DATABUNKER_SETUPKEY`** environment variable set on the Databunker Pro container — this enables the `/autoinstall` endpoint (details below).
+- A reachable database. If you use a **dedicated / managed database** (e.g. AWS RDS), create the `databunkerdb` database and roles first — see [Using an external database](#using-an-external-database).
+- _(Optional)_ a Databunker Pro **license key**. Without one, Databunker Pro runs in Trial mode.
+
+## How it works
+
+Unattended installation is three HTTP calls against the Databunker Pro service:
+
+1. **`GET /status`** — wait until the service is up.
+2. **`GET /dbstatus`** — check whether setup is still required (`{"installed": false}`).
+3. **`POST /autoinstall`** — perform the setup and return the credentials.
+
+After a successful `/autoinstall`, the setup endpoint shuts down and the container **restarts in normal operational mode**. The step is **idempotent**: if the database is already installed, skip it.
+
+## Enable the setup endpoint
+
+The `/autoinstall` endpoint is only available when a setup key is configured. Set **`DATABUNKER_SETUPKEY`** (and the persistent **`DATABUNKER_WRAPPINGKEY`**) in the container environment before starting Databunker Pro — for Docker Compose, in `.env/databunker.env`:
+
+```sh
+DATABUNKER_WRAPPINGKEY=<48-hex-character master key>
+DATABUNKER_SETUPKEY=<a long random secret>
+```
+
+<Warning>
+Treat `DATABUNKER_SETUPKEY` as a **credential** — anyone who can reach the service with it can initialise the vault. Use a long random value, keep it in your secrets manager, and restrict network access to the service during setup.
+</Warning>
+
+## Run the unattended install
+
+<Steps>
+<Step title="Wait until Databunker Pro is ready">
+Poll `GET /status` until it returns `200 OK`:
+
+```sh
+until curl -fsS http://localhost:3000/status >/dev/null; do sleep 2; done
+```
+</Step>
+
+<Step title="Check whether setup is required">
+```sh
+curl -s http://localhost:3000/dbstatus
+```
+
+A response of `{"status":"ok","installed":false}` means setup is needed. If `installed` is `true` (or the endpoint is gone once running normally), the vault is already installed — **stop here**.
+</Step>
+
+<Step title="Run autoinstall">
+Send the setup key (and optional license key) as form fields:
+
+<Tabs>
+<Tab title="curl">
+
+```sh
+SETUPKEY=$(grep '^DATABUNKER_SETUPKEY=' .env/databunker.env | cut -d= -f2-)
+
+curl -s -X POST http://localhost:3000/autoinstall \
+  --data-urlencode "setupkey=$SETUPKEY" \
+  --data-urlencode "licensekey=$LICENSEKEY"   # optional; omit for Trial mode
+```
+
+<Note>
+Use `--data-urlencode` (not `-d`): license keys are base64 and may contain `+` or `/`, which `-d` would corrupt.
+</Note>
+
+</Tab>
+<Tab title="Python">
+
+```python
+import time
+import requests
+
+BASE = "http://localhost:3000"
+SETUPKEY = "..."      # value of DATABUNKER_SETUPKEY
+LICENSEKEY = ""       # optional; leave empty for Trial mode
+
+# 1. wait until ready
+for _ in range(30):
+    try:
+        if requests.get(f"{BASE}/status", timeout=5).ok:
+            break
+    except requests.ConnectionError:
+        pass
+    time.sleep(2)
+
+# 2. install only if not already installed (idempotent)
+if requests.get(f"{BASE}/dbstatus", timeout=10).json().get("installed") is False:
+    body = {"setupkey": SETUPKEY}
+    if LICENSEKEY:
+        body["licensekey"] = LICENSEKEY
+    resp = requests.post(f"{BASE}/autoinstall", data=body, timeout=30).json()
+    assert resp.get("status") == "ok" and resp.get("root_token"), resp
+    # 3. persist resp securely — see next step
+    save_credentials(resp)
+```
+
+</Tab>
+</Tabs>
+</Step>
+
+<Step title="Save the generated credentials">
+On success the response contains the vault credentials:
+
+```json
+{
+  "status": "ok",
+  "root_token": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "wrapping_key": "...",
+  "shamir_keys": ["...", "...", "...", "...", "..."]
+}
+```
+
+Store all of these in your secrets manager immediately.
+
+<Warning>
+These secrets are shown **once** and cannot be retrieved again. The **`root_token`** is your admin credential — you pass it as the `X-Bunker-Token` header on every administrative API call. Losing it means re-installing.
+</Warning>
+</Step>
+</Steps>
+
+## Verify
+
+The setup server restarts the container in normal mode. Confirm it is serving, then use the root token for API calls:
+
+```sh
+curl -fsS http://localhost:3000/status
+```
+
+```sh
+curl -s -X POST http://localhost:3000/v2/SystemGetSystemStats \
+  -H "X-Bunker-Token: $ROOT_TOKEN"
+```
+
+## Using an external database
+
+The bundled Docker Compose project provisions the `databunkerdb` database and its roles automatically. When you point Databunker Pro at a **dedicated / managed** database (AWS RDS, Cloud SQL, Azure Database), create them yourself first — connect as the database master user and run:
+
+```sql
+CREATE ROLE bunkeruser NOSUPERUSER LOGIN PASSWORD '<password>';
+CREATE ROLE mtenant NOSUPERUSER NOLOGIN;
+CREATE ROLE madmin BYPASSRLS NOSUPERUSER NOLOGIN;
+CREATE DATABASE databunkerdb OWNER bunkeruser;
+-- then, connected to databunkerdb:
+GRANT ALL ON SCHEMA public TO bunkeruser;
+GRANT mtenant TO bunkeruser;
+GRANT madmin TO bunkeruser;
+```
+
+Point the container at the database with the `PGSQL_HOST`, `PGSQL_USER_NAME`, `PGSQL_USER_PASS`, and `PGSQL_SSL_MODE` environment variables, then run the unattended install as above.
+
+<Note>
+If you run **multiple Databunker Pro instances** against one shared database, they must all use the **same `DATABUNKER_WRAPPINGKEY`** (only one instance runs `/autoinstall`; the others start against the already-installed database). The wrapping key must persist across restarts, or the vault cannot be reopened.
+</Note>
+
+## Next steps
+
+- [Update your license key](/pro/howtos/update-license) at any time after install.
+- Rotate and back up your [master (wrapping) key](/pro/administration/master-key) and [Shamir key shares](/pro/administration/shamir-keys).
