@@ -18,14 +18,14 @@ When a request is made to create a user record, Databunker performs the followin
 1. Normalize email address, phone number, login name
 1. Optional strict user schema checks if schema is defined in configuration
 1. Calculate secure hash values for email address, phone number, login name
-1. Duplicate record validation using using hashed values of email address, phone number, login name
+1. Duplicate record validation using hashed values of email address, phone number, login name
 1. Generate a new record UUID to be used as a user token
 1. Encrypt the whole user json and save it in backend database (MySQL, PostgreSQL, SQLite)
 1. Return newly generated user token to the caller
 
-After creating a new user record, Databunker returns to the caller a user token inn UUID format. That token can be saved in existing database instead of storing personal records or PII/PHI.
+After creating a new user record, Databunker returns to the caller a user token in UUID format. That token can be saved in existing database instead of storing personal records or PII/PHI.
 
-![Databunker request flow](databunker-request-flow.png)
+![Databunker request flow](/oss/get-started/databunker-request-flow.png)
 
 Databunker provides you an API to lookup user records using the **email address**, **phone number**, **login name** or a **token** received when you create a user record.
 

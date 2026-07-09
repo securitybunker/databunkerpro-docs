@@ -137,8 +137,8 @@ curl -X POST https://your-databunker/v2/TokenCreate \
   -H "X-Bunker-Token: YOUR_API_KEY" \
   -d '{
     "record": "4532015112830366",
-    "type": "creditcard",
-    "expiration": "30d",
+    "tokentype": "creditcard",
+    "slidingtime": "30d",
     "unique": true
   }'
 ```

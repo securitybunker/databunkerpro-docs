@@ -119,6 +119,12 @@
           },
           {
             "tab": "Reference",
+            "groups": [
+              {
+                "group": "Overview",
+                "pages": ["oss/api/overview"]
+              }
+            ],
             "openapi": {
               "source": "oss/api/openapi.yml",
               "directory": "oss/api"

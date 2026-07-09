@@ -1,43 +1,35 @@
-# Mintlify Starter Kit
+# Databunker Documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Source for the official [Databunker](https://databunker.org/) documentation, published at **[docs.databunker.org](https://docs.databunker.org/)**.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+Databunker is a secure vault for personal data (PII, PHI, PCI, KYC) — it encrypts sensitive records and replaces them in your database with safe, random tokens. The docs cover two products:
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+- **Databunker Pro** (`pro/`) — the commercial, self-hosted PII vault and tokenization engine: guides, installation, administration, concepts, comparisons, and the `/v2` API reference.
+- **Databunker OSS** (`oss/`) — the open-source edition: quickstart, installation, architecture, and the `/v1` API reference.
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+The site is built with [Mintlify](https://mintlify.com/). Navigation is defined in `docs.json`; API references are generated from `pro/api/openapi.yml` and `oss/api/openapi.yml`.
 
-## Development
+## Local development
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+Install the [Mintlify CLI](https://www.npmjs.com/package/mint):
 
 ```
 npm i -g mint
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+Then run from the repo root (where `docs.json` lives):
 
 ```
 mint dev
 ```
 
-View your local preview at `http://localhost:3000`.
+View the local preview at `http://localhost:3000`.
 
-## Publishing changes
+## Publishing
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+Changes merged to `main` are deployed to production automatically via the Mintlify GitHub app.
 
-## Need help?
+## Related repositories
 
-### Troubleshooting
-
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
-
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+- [securitybunker/databunker](https://github.com/securitybunker/databunker) — Databunker OSS source code
+- [databunkerpro-js](https://github.com/securitybunker/databunkerpro-js) · [databunkerpro-python](https://github.com/securitybunker/databunkerpro-python) · [databunkerpro-php](https://github.com/securitybunker/databunkerpro-php) · [databunkerpro-java](https://github.com/securitybunker/databunkerpro-java) — Databunker Pro SDKs
