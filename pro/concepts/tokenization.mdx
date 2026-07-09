@@ -6,57 +6,32 @@ sidebarTitle: Tokenization
 Databunker Pro provides **two distinct tokenization engines**, each designed for a different job:
 
 - **PII tokenization** (`UserCreate` / `UserGet`) — stores a complete user profile (JSON, N fields) as one encrypted record and returns a single UUID token representing the whole profile. Builds secure hashed search indexes over `email`, `phone`, `login`, and a `custom` field for efficient lookups. This is the *user-table replacement* pattern; see the [PII Vault](/pro/get-started/pii-vault) page for full detail.
-- **Format-preserving tokenization** (`TokenCreate` / `TokenGet`) — tokenizes individual sensitive values such as credit-card numbers (Luhn-valid), `uint32` / `uint64` integers, and Unix timestamps. Returns both a UUID and a format-preserving token in the same response. This is the *PCI / single-value* pattern, covered in the rest of this page.
+- **Format-preserving tokenization** (`TokenCreate` / `TokenGet`) — tokenizes individual sensitive values such as `credit-card numbers` (Luhn-valid) and Unix timestamps. Returns both a UUID and a format-preserving token in the same response. This is the *PCI / single-value* pattern, covered in the rest of this page.
 
 Both engines share the same vault, encryption, multi-tenancy, and access-control layers — so the same auditability, key management, and CRBAC policies apply to either flow.
 
 Databunker Pro was built with the latest data privacy requirements in mind, such as data minimization, and is engineered to handle millions of data tokenization requests. The API supports bulk tokenization for efficient batch operations.
 
-## What Problems Does It Solve?
-
-1. **Data Privacy & Compliance**
-
-- ✅ Meets GDPR data minimization requirements
-- ✅ Protects sensitive data while maintaining format
-- ✅ Ensures regulatory compliance without sacrificing functionality
-- ✅ Reduces scope of PCI DSS compliance
-
-2. **Enterprise Scalability**
-
-- ✅ Handles millions of records through data partitioning
-- ✅ Provides high-performance tokenization operations
-- ✅ Supports multiple data formats and types
-- ✅ Enables efficient data processing at scale
-
-3. **Format Compatibility**
-
-- ✅ Preserves data format for legacy system compatibility
-- ✅ Maintains data validation rules (e.g., Luhn algorithm for credit cards)
-- ✅ Enables analytics while protecting actual data
-- ✅ Supports seamless integration with existing workflows
-
-## 🔄 Supported Data Types
+## Supported data types
 
 | Original Record Type  | Format Preservation  | Generated Token Format          |
 | --------------------- | -------------------- | ------------------------------- |
 | Credit Card Number    | ✅ (with Luhn check) | Format-preserving or UUID token |
-| Uint64/Uint32 integer | ✅                   | Format-preserving or UUID token |
 | Unix timestamp record | ✅                   | Format-preserving or UUID token |
 | Text string           | ❌                   | UUID token                      |
 
-## 🛠️ Key Features
-
-Databunker Pro has a number of unique features:
+## Key features
 
 ### Automatic Expiration
 
-In Databunker Pro, expiration allows you to set a lifespan for sensitive data tokens, ensuring they automatically expire after a defined period.
+In Databunker Pro, expiration allows you to set a lifespan for sensitive data tokens, ensuring they automatically expire after a defined period. Use `slidingtime` for a relative window (e.g. `30d`, `1h`) or `finaltime` for an absolute Unix-timestamp expiry.
 
 ```json
-// Set expiration for tokenized records
+// Set a 30-day sliding expiration for a tokenized record
 {
+  "tokentype": "creditcard",
   "record": "4532015112830366",
-  "expiration": "30d" // 30 days
+  "slidingtime": "30d"
 }
 ```
 
@@ -67,6 +42,7 @@ This unique flag is used for data deduplication. It ensures that each record is 
 ```json
 // Same input generates same token when enabled
 {
+  "tokentype": "creditcard",
   "record": "4532015112830366",
   "unique": true
 }
@@ -81,22 +57,23 @@ By default, Databunker Pro generates two tokens: one in UUID format and another 
 {
   "status": "ok",
   "tokenuuid": "550e8400-e29b-41d4-a716-446655440000",
-  "tokenbase": "4532015112830366" // Format-preserving token
+  "tokenbase": "4111111111111111" // Format-preserving token (Luhn-valid, same length)
 }
 ```
 
-## 🚀 Getting Started
+## Getting started
 
 ```bash
 # Example API call for tokenization
 curl -X POST https://databunker.pro/v2/TokenCreate \
-  -H "X-Bunker-Token: <access-tone>" \
+  -H "X-Bunker-Token: <access-token>" \
   -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
   -d '{
+    "tokentype": "creditcard",
     "record": "4532015112830366",
-    "type": "creditcard",
-    "expiration": "30d"
-    "unique": true,
+    "slidingtime": "30d",
+    "unique": true
   }'
 ```
 
@@ -106,14 +83,16 @@ Output:
 {
   "status": "ok",
   "tokenuuid": "550e8400-e29b-41d4-a716-446655440000",
-  "tokenbase": "4532015112830366" // Format-preserving token
+  "tokenbase": "4111111111111111" // Format-preserving token (Luhn-valid, same length)
 }
 ```
 
-## 📈 Benefits
+## Compliance and scale
 
-- **Compliance**: Built-in GDPR data minimization
-- **Security**: Protected sensitive data storage
-- **Compatibility**: Format preservation for legacy systems
-- **Scalability**: Enterprise-grade performance
-- **Flexibility**: Multiple token format support
+Format-preserving tokenization addresses three concerns at once:
+
+| Concern | What tokenization gives you |
+| --- | --- |
+| **Privacy & compliance** | Supports GDPR data minimization and reduces PCI DSS scope — real card numbers never reach your application databases, logs, or analytics systems. |
+| **Legacy compatibility** | Tokens keep the original format and validation rules (e.g. the Luhn check for cards), so they drop into existing schemas, validators, and downstream systems without changes. |
+| **Scale** | Data partitioning and bulk endpoints handle millions of records at high throughput. |
