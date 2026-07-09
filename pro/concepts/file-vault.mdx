@@ -1,0 +1,145 @@
+---
+title: File Vault
+sidebarTitle: File Vault
+description: Store per-user files encrypted at rest, backed by local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage — with the same key management, multi-tenancy, and access control as the rest of Databunker Pro.
+---
+
+Databunker Pro can store files, not just structured records. Each file is attached to a user, encrypted at rest, and served back only through the API. This lets you keep documents such as ID scans, KYC paperwork, medical attachments, or exported reports under the same vault, audit trail, and access-control policies that protect the rest of a user's data.
+
+## How encryption works
+
+Every file is encrypted with its own **per-file key**, which is in turn **wrapped by the user's record key**. Nothing is written to storage in the clear, and a file can only be decrypted through the vault.
+
+Because the file key is chained to the user's record key, file storage inherits two properties of the PII vault:
+
+- **Crypto-shredding on erasure** — deleting the user destroys the record key, which renders all of that user's files permanently unrecoverable. This is the mechanism behind GDPR "right to erasure" for attached documents.
+- **Shared key management** — the same key rotation, Shamir's secret sharing, multi-tenancy, and access control apply to files as to any other record.
+
+Encrypted objects are stored in a configurable backend:
+
+| Backend | Typical use |
+| --- | --- |
+| Local disk | Single-node or on-prem deployments |
+| Amazon S3 | AWS deployments |
+| Google Cloud Storage | GCP deployments |
+| Azure Blob Storage | Azure deployments |
+
+The storage backend only ever holds ciphertext — the keys live in the vault, not with the objects.
+
+## API operations
+
+| Endpoint | Purpose |
+| --- | --- |
+| `FileCreate` | Store an encrypted file for a user |
+| `FileGet` | Retrieve and decrypt a file |
+| `FileListUserFiles` | List a user's files (metadata only) |
+| `FileDelete` | Remove a file's object and metadata |
+
+Every call identifies the owning user with a `mode` (`login`, `token`, `email`, `phone`, or `custom`) and the matching `identity`.
+
+## Store a file
+
+File content is supplied as a base64-encoded `filedata` field. The MIME type is auto-detected when `mimetype` is omitted.
+
+```bash
+curl -X POST https://databunker.pro/v2/FileCreate \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "user@example.com",
+    "filename": "passport.pdf",
+    "filedata": "JVBERi0xLjQKJ...",
+    "slidingtime": "1y"
+  }'
+```
+
+Output:
+
+```json
+{
+  "status": "ok",
+  "token": "550e8400-e29b-41d4-a716-446655440000",
+  "fileuuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "duplicate": false
+}
+```
+
+If the same content is uploaded again for the same user, no new object is written and the response sets `"duplicate": true`.
+
+## Retrieve a file
+
+Select a file by `fileuuid` (preferred) or by `filename` — when selecting by name, the most recently created file with that name is returned. By default the content comes back as a base64-encoded `filedata` field:
+
+```bash
+curl -X POST https://databunker.pro/v2/FileGet \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "user@example.com",
+    "fileuuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "fileuuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "filename": "passport.pdf",
+  "mimetype": "application/pdf",
+  "size": 20481,
+  "filedata": "JVBERi0xLjQKJ..."
+}
+```
+
+For direct downloads, set `"raw": true` to receive the decrypted bytes with the appropriate `Content-Type` and `Content-Disposition` headers instead of a JSON envelope.
+
+## List a user's files
+
+`FileListUserFiles` returns metadata only — never file content:
+
+```bash
+curl -X POST https://databunker.pro/v2/FileListUserFiles \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{ "mode": "email", "identity": "user@example.com" }'
+```
+
+```json
+{
+  "status": "ok",
+  "files": [
+    {
+      "fileuuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "filename": "passport.pdf",
+      "mimetype": "application/pdf",
+      "size": 20481,
+      "creationtime": 1751980800
+    }
+  ]
+}
+```
+
+## Delete a file
+
+`FileDelete` removes both the stored object and its metadata:
+
+```bash
+curl -X POST https://databunker.pro/v2/FileDelete \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "email",
+    "identity": "user@example.com",
+    "fileuuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+## Retention and expiration
+
+Files support the same expiration model as tokens. Set `slidingtime` for a relative retention window (e.g. `30d`, `1y`) or `finaltime` for an absolute cutoff (e.g. `90d`, `2026-01-01`). This lets you enforce document retention policies automatically instead of tracking expiry in your own application.

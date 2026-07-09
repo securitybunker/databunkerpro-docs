@@ -50,6 +50,7 @@
                 "group": "Concepts",
                 "pages": [
                   "pro/concepts/tokenization",
+                  "pro/concepts/file-vault",
                   "pro/concepts/fuzzy-search",
                   "pro/concepts/record-versioning",
                   "pro/concepts/select-security",
