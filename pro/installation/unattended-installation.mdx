@@ -1,6 +1,6 @@
 ---
 title: Unattended installation
-sidebarTitle: Unattended install
+sidebarTitle: Unattended installation
 description: Complete the Databunker Pro first-time setup automatically over the API — no browser required — for CI/CD, infrastructure-as-code, and reproducible deployments.
 ---
 
@@ -27,7 +27,7 @@ Unattended installation is three HTTP calls against the Databunker Pro service:
 **Setup endpoints are ephemeral.** While the vault is not yet installed, Databunker Pro runs a small **setup server** that hosts `/dbstatus`, `/setup`, and `/autoinstall`. As soon as setup completes, that server shuts down and the container **restarts in normal operational mode** — where only the regular API (`/status`, `/v2/*`) is served and **`/dbstatus` returns `404`**. That 404 is expected: it means the vault is already installed. (`/dbstatus` only ever returns a boolean `installed` flag — no sensitive data.)
 </Note>
 
-Because of this, make your installer **idempotent**: run `/autoinstall` **only** when `/dbstatus` explicitly returns `installed: false`. Treat a `404`, a connection error, or any other response as **"already installed — skip."**
+The install runs once: call `/autoinstall` **only** when `/dbstatus` explicitly returns `installed: false`; treat a `404`, a connection error, or any other response as **"already installed — skip."**
 
 ## Enable the setup endpoint
 
@@ -99,7 +99,7 @@ for _ in range(30):
         pass
     time.sleep(2)
 
-# 2. install only if the vault explicitly reports installed=false (idempotent).
+# 2. install only if the vault explicitly reports installed=false.
 #    A 404 / error means the setup server is gone -> already installed -> skip.
 def needs_install() -> bool:
     try:
