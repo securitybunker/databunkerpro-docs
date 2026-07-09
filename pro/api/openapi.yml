@@ -40,6 +40,27 @@ info:
 
     ## Base URL
     The API is available at `/v2/` endpoint with all requests using POST method.
+
+    ## Error Handling
+    Every error is returned as a JSON body with a fixed shape:
+
+    ```json
+    {"status": "error", "message": "The user record was not found"}
+    ```
+
+    HTTP status codes follow REST conventions:
+
+    | Code | Meaning |
+    |------|---------|
+    | 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure |
+    | 403  | Access denied — missing/invalid API token, insufficient permissions, disabled feature, or license limit |
+    | 404  | The referenced record was not found |
+    | 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state |
+    | 500  | Internal server error |
+
+    Successful responses always include `"status": "ok"`. As a defensive pattern, check the JSON `status` field in addition to the HTTP status code.
+
+    **Note:** Databunker Pro releases prior to the 2026-07 update returned HTTP `405` for most error conditions. If you run an older release, treat any non-2xx response as an error and rely on the JSON `status`/`message` fields.
   version: 2.0.0
   contact:
     name: Databunker Support
@@ -111,6 +132,14 @@ paths:
                   token:
                     type: string
                     description: User's unique token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserGet:
     post:
@@ -172,6 +201,14 @@ paths:
                     description: User's group roles
                     items:
                       type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserUpdate:
     post:
@@ -211,6 +248,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserPatch:
     post:
@@ -261,6 +308,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserDelete:
     post:
@@ -296,6 +353,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserSearch:
     post:
@@ -361,6 +426,12 @@ paths:
                           description: User's group roles
                           items:
                             type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserListVersions:
     post:
@@ -410,6 +481,14 @@ paths:
                         md5:
                           type: string
                           description: MD5 hash of the version
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserDeleteRequest:
     post:
@@ -448,6 +527,14 @@ paths:
                   requestuuid:
                     type: string
                     description: UUID of the deletion request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserRequestGet:
     post:
@@ -482,6 +569,14 @@ paths:
                   request:
                     type: object
                     description: User request information
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserRequestCancel:
     post:
@@ -516,6 +611,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserRequestApprove:
     post:
@@ -550,6 +655,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserRequestListUserRequests:
     post:
@@ -604,6 +719,14 @@ paths:
                         requesttype:
                           type: string
                           description: Type of the request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserUpdateRequest:
     post:
@@ -646,6 +769,14 @@ paths:
                   requestuuid:
                     type: string
                     description: UUID of the update request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserPatchRequest:
     post:
@@ -703,6 +834,14 @@ paths:
   # ========================================
   # BULK OPERATIONS
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/BulkListUnlock:
     post:
       summary: Create bulk list unlock
@@ -731,6 +870,12 @@ paths:
                   unlockuuid:
                     type: string
                     description: UUID for the unlock mechanism
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListUsers:
     post:
@@ -815,6 +960,12 @@ paths:
                           description: User's group roles
                           items:
                             type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListAllUsers:
     post:
@@ -885,6 +1036,12 @@ paths:
                           description: User's group roles
                           items:
                             type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListGroupUsers:
     post:
@@ -941,6 +1098,14 @@ paths:
                         profile:
                           type: object
                           description: User profile information
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListAllUserRequests:
     post:
@@ -988,6 +1153,12 @@ paths:
                     items:
                       type: object
                       description: User request information
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListAllAuditEvents:
     post:
@@ -1044,6 +1215,12 @@ paths:
                         more:
                           type: boolean
                           description: Whether there are more details available for this event
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkListTokens:
     post:
@@ -1097,6 +1274,12 @@ paths:
                         tokentype:
                           type: string
                           description: Type of the token (e.g., creditcard, email)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/BulkDeleteTokens:
     post:
@@ -1136,6 +1319,12 @@ paths:
                   deleted:
                     type: integer
                     description: Number of tokens successfully deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/UserCreateBulk:
     post:
@@ -1207,6 +1396,14 @@ paths:
   # ========================================
   # APP DATA MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/AppdataCreate:
     post:
       summary: Create application data for user
@@ -1248,6 +1445,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataGet:
     post:
@@ -1292,6 +1497,14 @@ paths:
                   appdata:
                     type: object
                     description: Application-specific data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataUpdate:
     post:
@@ -1334,6 +1547,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataListAppNames:
     post:
@@ -1365,6 +1586,14 @@ paths:
                     items:
                       type: string
                     description: List of application names
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataListUserAppNames:
     post:
@@ -1405,6 +1634,14 @@ paths:
                     items:
                       type: string
                     description: List of application names for the user
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataDelete:
     post:
@@ -1443,6 +1680,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataListVersions:
     post:
@@ -1495,6 +1740,14 @@ paths:
                         md5:
                           type: string
                           description: MD5 hash of the version
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AppdataUpdateRequest:
     post:
@@ -1544,6 +1797,14 @@ paths:
   # ========================================
   # FILE STORAGE
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/FileCreate:
     post:
       summary: Store a file for a user
@@ -1606,6 +1867,14 @@ paths:
                   duplicate:
                     type: boolean
                     description: True if the file content already existed for this user
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/FileGet:
     post:
@@ -1677,6 +1946,14 @@ paths:
                 type: string
                 format: binary
                 description: Raw decrypted file content (returned when raw is true)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/FileListUserFiles:
     post:
@@ -1738,6 +2015,14 @@ paths:
                         creationtime:
                           type: integer
                           description: Creation time (Unix timestamp)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/FileDelete:
     post:
@@ -1783,6 +2068,14 @@ paths:
   # ========================================
   # LEGAL BASIS & AGREEMENT MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/LegalBasisCreate:
     post:
       summary: Create legal basis
@@ -1835,6 +2128,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/LegalBasisUpdate:
     post:
@@ -1891,6 +2192,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/LegalBasisDelete:
     post:
@@ -1922,6 +2231,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/LegalBasisListAgreements:
     post:
@@ -1959,6 +2276,12 @@ paths:
                         status:
                           type: string
                           description: Status of the legal basis
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementAccept:
     post:
@@ -2016,6 +2339,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementGet:
     post:
@@ -2057,6 +2388,14 @@ paths:
                   agreement:
                     type: object
                     description: Agreement information
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementListUserAgreements:
     post:
@@ -2103,6 +2442,14 @@ paths:
                         status:
                           type: string
                           description: Agreement status
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementCancel:
     post:
@@ -2141,6 +2488,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementCancelRequest:
     post:
@@ -2182,6 +2537,14 @@ paths:
                   requestuuid:
                     type: string
                     description: UUID of the cancellation request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AgreementRevokeAll:
     post:
@@ -2217,6 +2580,14 @@ paths:
   # ========================================
   # PROCESSING ACTIVITY MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/ProcessingActivityCreate:
     post:
       summary: Create processing activity
@@ -2259,6 +2630,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/ProcessingActivityUpdate:
     post:
@@ -2305,6 +2684,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/ProcessingActivityDelete:
     post:
@@ -2336,6 +2723,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/ProcessingActivityLinkLegalBasis:
     post:
@@ -2370,6 +2765,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/ProcessingActivityUnlinkLegalBasis:
     post:
@@ -2404,6 +2807,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/ProcessingActivityListActivities:
     post:
@@ -2445,6 +2856,12 @@ paths:
   # ========================================
   # TOKENIZATION MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/TokenCreate:
     post:
       summary: Create token for sensitive data
@@ -2494,6 +2911,12 @@ paths:
                   tokenuuid:
                     type: string
                     description: UUID of the token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TokenGet:
     post:
@@ -2528,6 +2951,14 @@ paths:
                   record:
                     type: string
                     description: The original sensitive data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TokenDelete:
     post:
@@ -2559,6 +2990,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TokenCreateBulk:
     post:
@@ -2633,6 +3072,12 @@ paths:
   # ========================================
   # GROUP MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/GroupCreate:
     post:
       summary: Create a new group
@@ -2672,6 +3117,14 @@ paths:
                   groupid:
                     type: integer
                     description: ID of the created group
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupGet:
     post:
@@ -2714,6 +3167,14 @@ paths:
                   grouptype:
                     type: string
                     description: Type of the group
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupListAllGroups:
     post:
@@ -2754,6 +3215,12 @@ paths:
                         groupdesc:
                           type: string
                           description: Description of the group
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupUpdate:
     post:
@@ -2794,6 +3261,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupDelete:
     post:
@@ -2828,6 +3305,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupListUserGroups:
     post:
@@ -2877,6 +3362,14 @@ paths:
                         groupdesc:
                           type: string
                           description: Description of the group
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupAddUser:
     post:
@@ -2924,6 +3417,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/GroupDeleteUser:
     post:
@@ -2969,6 +3470,14 @@ paths:
   # ========================================
   # ROLE & POLICY MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/RoleCreate:
     post:
       summary: Create a new role
@@ -3005,6 +3514,14 @@ paths:
                   roleid:
                     type: integer
                     description: ID of the created role
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/RoleUpdate:
     post:
@@ -3042,6 +3559,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/PolicyCreate:
     post:
@@ -3103,6 +3630,14 @@ paths:
                   policyid:
                     type: integer
                     description: ID of the created policy
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/PolicyUpdate:
     post:
@@ -3143,6 +3678,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/PolicyGet:
     post:
@@ -3185,6 +3730,14 @@ paths:
                   policy:
                     type: object
                     description: Policy definition
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/PolicyListAllPolicies:
     post:
@@ -3225,6 +3778,12 @@ paths:
                         policydesc:
                           type: string
                           description: Description of the policy
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/RoleLinkPolicy:
     post:
@@ -3268,6 +3827,14 @@ paths:
   # ========================================
   # AUTHENTICATION & ACCESS TOKENS
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/XTokenCreateForUser:
     post:
       summary: Create access token for user
@@ -3311,6 +3878,14 @@ paths:
                   xtoken:
                     type: string
                     description: The created access token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/XTokenCreateForRole:
     post:
@@ -3357,6 +3932,14 @@ paths:
   # ========================================
   # AUDIT MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/AuditListUserEvents:
     post:
       summary: List user audit events
@@ -3413,6 +3996,14 @@ paths:
                         timestamp:
                           type: string
                           description: Timestamp of the event
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/AuditGetEvent:
     post:
@@ -3459,6 +4050,14 @@ paths:
   # ========================================
   # TENANT MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/TenantCreate:
     post:
       summary: Create a new tenant
@@ -3501,6 +4100,14 @@ paths:
                   xtoken:
                     type: string
                     description: Access token for the tenant
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TenantGet:
     post:
@@ -3538,6 +4145,14 @@ paths:
                   tenantorg:
                     type: string
                     description: Organization name
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TenantUpdate:
     post:
@@ -3578,6 +4193,16 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/TenantListTenants:
     post:
@@ -3630,6 +4255,12 @@ paths:
   # ========================================
   # SHARED RECORDS
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/SharedRecordCreate:
     post:
       summary: Create shared record
@@ -3679,6 +4310,14 @@ paths:
                   recorduuid:
                     type: string
                     description: UUID of the shared record
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SharedRecordGet:
     post:
@@ -3717,6 +4356,14 @@ paths:
   # ========================================
   # SESSION MANAGEMENT
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/SessionUpsert:
     post:
       summary: Upsert session
@@ -3757,6 +4404,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SessionDelete:
     post:
@@ -3788,6 +4443,14 @@ paths:
                   status:
                     type: string
                     example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SessionListUserSessions:
     post:
@@ -3834,6 +4497,14 @@ paths:
                         sessiondata:
                           type: object
                           description: Session data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SessionGet:
     post:
@@ -3872,6 +4543,14 @@ paths:
   # ========================================
   # SYSTEM OPERATIONS
   # ========================================
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v2/SystemGenerateWrappingKey:
     post:
       summary: Generate wrapping key from Shamir's Secret Sharing keys
@@ -3911,6 +4590,12 @@ paths:
                   wrappingkey:
                     type: string
                     description: The generated wrapping key
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemGetSystemStats:
     post:
@@ -3952,6 +4637,12 @@ paths:
                       numsessions:
                         type: integer
                         description: Total number of active sessions
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemGetUserReport:
     post:
@@ -3990,6 +4681,14 @@ paths:
                   report:
                     type: object
                     description: User report data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemGetUserProfiles:
     post:
@@ -4051,6 +4750,14 @@ paths:
                         tenantname:
                           type: string
                           description: Name of the tenant this profile belongs to
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemSearchUserProfiles:
     post:
@@ -4108,6 +4815,14 @@ paths:
                         tenantname:
                           type: string
                           description: Name of the tenant this profile belongs to
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemDeleteUserProfiles:
     post:
@@ -4175,6 +4890,14 @@ paths:
                         tenantname:
                           type: string
                           description: Name of the tenant the profile was deleted from
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemRestoreUserProfile:
     post:
@@ -4228,6 +4951,14 @@ paths:
                   profile:
                     type: object
                     description: Restored user profile data
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v2/SystemGetUserHTMLReport:
     post:
@@ -4267,6 +4998,14 @@ paths:
                     type: string
                     description: HTML content of the user report
                 description: HTML report content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -4281,16 +5020,65 @@ components:
       name: X-Bunker-Tenant
       description: Tenant identifier for multi-tenant setups
 
+  responses:
+    BadRequest:
+      description: Bad request — malformed body, missing or invalid parameters, schema validation failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: "Missing API request parameters: profile"
+    AccessDenied:
+      description: Access denied — missing or invalid API token, insufficient permissions, disabled feature, or license limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: "Access denied"
+    NotFound:
+      description: The referenced record was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: "The user record was not found"
+    Conflict:
+      description: Conflict — duplicate record, name already in use, or the operation conflicts with the record's current state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: "Duplicate index: email"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: "Internal error"
+
   schemas:
     Error:
       type: object
+      required: [status, message]
       properties:
         status:
           type: string
+          enum: [error]
           example: "error"
         message:
           type: string
-          description: Error message
+          description: Human-readable error message
 
     Success:
       type: object

@@ -48,3 +48,27 @@ curl -X POST http://localhost:3000/v2/UserCreate \
 
 ## Base URL
 The API is available at `/v2/` endpoint with all requests using POST method.
+
+## Error Handling
+
+Every error is returned as a JSON body with a fixed shape:
+
+```json
+{ "status": "error", "message": "The user record was not found" }
+```
+
+HTTP status codes follow REST conventions:
+
+| Code | Meaning                                                                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------- |
+| 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure                     |
+| 403  | Access denied — missing/invalid API token, insufficient permissions, disabled feature, or license limit    |
+| 404  | The referenced record was not found                                                                         |
+| 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state   |
+| 500  | Internal server error                                                                                       |
+
+Successful responses always include `"status": "ok"`. As a defensive pattern, check the JSON `status` field in addition to the HTTP status code.
+
+<Note>
+Databunker Pro releases prior to the 2026-07 update returned HTTP `405` for most error conditions. If you run an older release, treat any non-2xx response as an error and rely on the JSON `status`/`message` fields.
+</Note>
