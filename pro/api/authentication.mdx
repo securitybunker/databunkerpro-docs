@@ -1,0 +1,125 @@
+---
+title: Authentication
+description: "Every credential type in Databunker Pro — root tokens, tenant tokens, role and user xtokens, and the bulk-unlock UUID — and how to obtain and use each one."
+---
+
+Every authenticated API call carries a credential in the `X-Bunker-Token` header. Databunker Pro has a small hierarchy of credential types, each scoped to a different level of access. This page is the single reference for all of them.
+
+## Request headers
+
+| Header | Required | Purpose |
+| ---------------- | -------- | ------------------------------------------------------------------------ |
+| `X-Bunker-Token` | Yes (for authenticated endpoints) | The access credential — any of the token types below |
+| `X-Bunker-Tenant` | No | Selects the tenant by name in [multi-tenant](/pro/administration/multi-tenancy) deployments |
+
+If `X-Bunker-Tenant` is omitted, Databunker Pro derives the tenant from the **subdomain** of the request host (`acme.databunker.example.com` → tenant `acme`). Requests to `localhost` or a bare host resolve to the **default** tenant.
+
+## Credential hierarchy
+
+| Credential | Token type | Obtained via | Expiry |
+| -------------------- | ---------- | -------------------------------------------------- | ------------------------------------------------ |
+| Root token | `root` | Interactive setup or unattended install | Never |
+| Tenant access token | `root` (tenant-scoped) | `TenantCreate` | Never |
+| Role xtoken | `role` | `XTokenCreateForRole` | Default 10 minutes; capped by `max_xtoken_retention_period` |
+| User login xtoken | `login` | `XTokenCreateForUser` | Default 10 minutes; capped by `max_xtoken_retention_period` |
+| Bulk-unlock UUID | request gate | `BulkListUnlock` | 60 seconds |
+
+All tokens are stored **hashed** on the server — a token value is shown exactly once at creation time and cannot be recovered later.
+
+### Root token
+
+The highest-privilege credential of the deployment, created once at installation:
+
+- **Interactive setup** — shown once on the setup completion screen. See [Generate admin credentials](/pro/installation/generate-admin-credentials).
+- **Unattended install** — returned by the `/autoinstall` endpoint, which is enabled only while the `DATABUNKER_SETUPKEY` environment variable is set. See [Unattended installation](/pro/installation/unattended-installation).
+
+Root tokens never expire. Use them for administration and automation, and prefer scoped role xtokens for application traffic.
+
+### Tenant access token
+
+In multi-tenant deployments, `TenantCreate` returns an `xtoken` — the tenant administrator's credential. It behaves like a root token scoped to that tenant:
+
+```bash
+curl -X POST https://your-databunker/v2/TenantCreate \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"tenantname":"acme","tenantorg":"Acme Corp"}'
+```
+
+```json
+{ "status": "ok", "xtoken": "TENANT-ACCESS-TOKEN" }
+```
+
+The tenant admin passes this token in `X-Bunker-Token`, together with `X-Bunker-Tenant: acme` (or the tenant subdomain). See [Multi-tenancy](/pro/administration/multi-tenancy).
+
+### Role xtoken
+
+Scoped service credentials governed by [access-control policies](/pro/administration/access-control). Setup is three calls:
+
+```bash
+# 1. Create a role
+curl -X POST https://your-databunker/v2/RoleCreate \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"rolename":"support-desk"}'
+
+# 2. Attach a policy to the role
+curl -X POST https://your-databunker/v2/RoleLinkPolicy \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"roleid":1,"policyid":1}'
+
+# 3. Issue an xtoken for the role
+curl -X POST https://your-databunker/v2/XTokenCreateForRole \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"roleid":1,"finaltime":"7d"}'
+```
+
+```json
+{ "status": "ok", "xtoken": "ROLE-XTOKEN" }
+```
+
+Without `finaltime` the xtoken expires after **10 minutes**. A supplied `finaltime` is capped by the `max_xtoken_retention_period` configuration policy.
+
+### User login xtoken
+
+A short-lived credential that lets an end user act on **their own record only** (e.g. from the user privacy portal):
+
+```bash
+curl -X POST https://your-databunker/v2/XTokenCreateForUser \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"mode":"email","identity":"user@example.com"}'
+```
+
+```json
+{ "status": "ok", "xtoken": "USER-LOGIN-XTOKEN", "token": "USER-TOKEN-UUID" }
+```
+
+Same expiry rules as role xtokens: 10 minutes by default, capped by `max_xtoken_retention_period`.
+
+<Note>
+For safety, a login xtoken **cannot** invoke `UserDelete`, `UserUpdate`, `UserPatch`, `AppdataUpdate`, or `AgreementCancel` on its own record — these self-service operations must go through an admin or a [user request workflow](/pro/api/overview) with approval.
+</Note>
+
+### Bulk-unlock UUID
+
+Bulk read and delete operations are **denied by default** — an admin token alone is not enough. You must first obtain a short-lived unlock UUID, then pass it with the bulk call:
+
+```bash
+# Step 1: obtain the unlock UUID (valid for 60 seconds)
+curl -X POST https://your-databunker/v2/BulkListUnlock \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN"
+# → { "status": "ok", "unlockuuid": "..." }
+
+# Step 2: use it in the bulk request
+curl -X POST https://your-databunker/v2/BulkListAllUsers \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d '{"unlockuuid":"...","offset":0,"limit":100}'
+```
+
+The unlock UUID lives for **60 seconds** and may be reused within that window. It applies to `BulkList*`, `BulkDeleteTokens`, `UserSearch`, and the cross-tenant `System*` lookups. See [Select security](/pro/concepts/select-security) for the design rationale.
+
+## Endpoint permission levels
+
+- **Public endpoints** — no token required: `UserPrelogin`, `UserLogin`, `CaptchaCreate`, `SharedRecordGet`, `TenantGetUIConf`. Calls to these are not written to the audit trail.
+- **Authenticated endpoints** — everything else requires `X-Bunker-Token` and passes policy evaluation: root tokens bypass policy checks, role xtokens are evaluated against their linked policies, and login xtokens are restricted to the user's own record.
+- **Main-tenant-only endpoints** — denied to sub-tenant admins even with a valid tenant token: `RoleCreate`, `RoleUpdate`, `PolicyCreate`, `PolicyUpdate`, `TenantListTenants`, `SystemGenerateWrappingKey`, and all cross-tenant `System*` operations.
+
+Failed authentication returns HTTP `403` with `{"status":"error","message":"Access denied"}` — see [Errors](/pro/api/errors).

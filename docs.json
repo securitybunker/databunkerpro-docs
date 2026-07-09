@@ -85,8 +85,13 @@
             "tab": "API Reference",
             "groups": [
               {
-                "group": "Overview",
-                "pages": ["pro/api/overview"]
+                "group": "API Basics",
+                "pages": [
+                  "pro/api/overview",
+                  "pro/api/authentication",
+                  "pro/api/errors",
+                  "pro/api/pagination"
+                ]
               }
             ],
             "openapi": {

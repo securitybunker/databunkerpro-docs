@@ -31,13 +31,13 @@ This solution addressed some concerns but still left room for improvement.
 Over time, we developed a more secure solution:
 
 1. **Unlock Request:** A special API unlock request must be submited, specifying whether they want to unlock all users or a specific group of users.
-1. **Temporary Token:** The unlock request generates a temporary token with a short expiration window (e.g., a few minutes).
+1. **Temporary Token:** The unlock request generates a temporary token with a short expiration window (60 seconds).
 1. **Token Validation:** During the token's validity period, user records can only be dumped if the token is included in the API request.
 
 **This solution ensured that bulk data access required explicit admin intent, was time-restricted, and could not be abused by malicious actors.**
 
 The bulk unlock UUID is designed with strict time constraints for enhanced security:
-- It expires automatically after a few seconds
+- It expires automatically after 60 seconds
 - It must be included when retrieving records for any group of users
 - A new UUID must be requested for subsequent bulk operations
 

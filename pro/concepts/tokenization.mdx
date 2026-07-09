@@ -123,7 +123,7 @@ Output:
 
 ### Read and delete in bulk
 
-Bulk read and delete return or destroy plaintext for many records at once, so they require a short-lived **unlock UUID** as an extra authorization step. Call `BulkListUnlock` first, then pass the returned `unlockuuid` to `BulkListTokens` or `BulkDeleteTokens` along with the token UUIDs.
+Bulk read and delete return or destroy plaintext for many records at once, so they require a short-lived **[unlock UUID](/pro/api/authentication#bulk-unlock-uuid)** as an extra authorization step. Call `BulkListUnlock` first, then pass the returned `unlockuuid` to `BulkListTokens` or `BulkDeleteTokens` along with the token UUIDs.
 
 ```bash
 # 1. Obtain an unlock UUID

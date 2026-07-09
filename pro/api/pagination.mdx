@@ -1,0 +1,70 @@
+---
+title: Pagination
+description: "How list endpoints paginate results in Databunker Pro — offset/limit parameters, the response envelope, and a worked example."
+---
+
+List endpoints use **offset/limit pagination**. Parameters are passed in the JSON request body:
+
+| Parameter | Type    | Default | Notes                                                        |
+| --------- | ------- | ------- | ------------------------------------------------------------ |
+| `offset`  | integer | `0`     | Number of records to skip                                     |
+| `limit`   | integer | `10`    | Page size. Values below `1` or above `100` are treated as `100` |
+
+<Warning>
+The `limit` cap is silent: requesting `limit: 500` (or an invalid value) returns up to **100** rows without an error. Always read `total` from the response instead of assuming your requested page size was honored.
+</Warning>
+
+## Response envelope
+
+All list endpoints share the same envelope:
+
+```json
+{
+  "status": "ok",
+  "total": 1543,
+  "rows": [ { "...": "..." } ]
+}
+```
+
+`total` is the **complete record count**, not the number of rows in the current page — use it to compute how many pages to fetch.
+
+## Paginated endpoints
+
+| Endpoint | Notes |
+| ------------------------------ | ---------------------------------------------------------- |
+| `BulkListUsers` | Requires an [unlock UUID](/pro/api/authentication#bulk-unlock-uuid) |
+| `BulkListAllUsers` | Requires an unlock UUID; needs the `list_users` config flag |
+| `BulkListGroupUsers` | Requires an unlock UUID |
+| `BulkListAllUserRequests` | Requires an unlock UUID |
+| `BulkListAllAuditEvents` | Requires an unlock UUID |
+| `UserRequestListUserRequests` | Per-user request list |
+| `AuditListUserEvents` | Per-user audit trail |
+| `TenantListTenants` | Main-tenant admin only |
+
+Other `List*` endpoints (`GroupListAllGroups`, `PolicyListAllPolicies`, `AppdataListUserAppNames`, `FileListUserFiles`, `SessionListUserSessions`, etc.) return the **full result set** in one response — their collections are expected to stay small.
+
+<Note>
+Cursor-based pagination is not available — offset/limit is the only mechanism.
+</Note>
+
+## Example: paging through all users
+
+Bulk listing is gated by a short-lived unlock UUID (see [Authentication](/pro/api/authentication#bulk-unlock-uuid)). Fetch the unlock, then iterate:
+
+```bash
+# Obtain an unlock UUID (valid for 60 seconds)
+UNLOCK=$(curl -s -X POST https://your-databunker/v2/BulkListUnlock \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" | jq -r .unlockuuid)
+
+# Page 1 (records 0-99)
+curl -X POST https://your-databunker/v2/BulkListAllUsers \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d "{\"unlockuuid\":\"$UNLOCK\",\"offset\":0,\"limit\":100}"
+
+# Page 2 (records 100-199)
+curl -X POST https://your-databunker/v2/BulkListAllUsers \
+  -H "X-Bunker-Token: ROOT-ACCESS-TOKEN" \
+  -d "{\"unlockuuid\":\"$UNLOCK\",\"offset\":100,\"limit\":100}"
+```
+
+If a long export outlives the 60-second unlock window, request a fresh `unlockuuid` and continue from the same `offset`.

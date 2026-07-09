@@ -1,0 +1,87 @@
+---
+title: Errors
+description: "Error response format, HTTP status codes, and a catalog of common error messages returned by the Databunker Pro API."
+---
+
+Every error is returned as a JSON body with a fixed shape:
+
+```json
+{ "status": "error", "message": "The user record was not found" }
+```
+
+Successful responses always include `"status": "ok"`. As a defensive pattern, check the JSON `status` field in addition to the HTTP status code.
+
+## HTTP status codes
+
+| Code | Meaning                                                                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------- |
+| 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure                     |
+| 403  | Access denied — missing/invalid API token, insufficient permissions, disabled feature, or license limit    |
+| 404  | The referenced record was not found                                                                         |
+| 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state   |
+| 500  | Internal server error                                                                                       |
+
+<Note>
+Databunker Pro releases prior to the 2026-07 update returned HTTP `405` for most error conditions. If you run an older release, treat any non-2xx response as an error and rely on the JSON `status`/`message` fields.
+</Note>
+
+## Common error messages
+
+The `message` field is human-readable. Representative messages per status code:
+
+### 400 — Bad request
+
+| Message | Cause |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `Missing API request parameters: profile` | A required request field was omitted (lists the fields) |
+| `Failed to decode the request body` | The body is not valid JSON |
+| `Bad UUID` | An identifier is not a valid UUID |
+| `The mode parameter has an incorrect format` | An enum-style parameter has an unexpected value |
+| `Failed to validate user schema: ...` | The profile fails the configured user record schema |
+| `The filedata parameter is not valid base64` | File upload payload is not base64-encoded |
+
+### 403 — Access denied
+
+| Message | Cause |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `Access denied` | Missing/invalid `X-Bunker-Token`, or the token's policy denies the operation |
+| `API access denied` | Policy evaluation rejected the request |
+| `Record limit reached` | The license record cap was hit — new records cannot be created |
+| `License expired` | The installation license has expired |
+| `BulkListUsers is disabled` | The `list_users` configuration flag is off |
+| `The unlockuuid value was not found or is not valid` | The [bulk-unlock UUID](/pro/api/authentication#bulk-unlock-uuid) is missing, wrong, or past its 60-second lifetime |
+| `Only the main tenant admin can ...` | A main-tenant-only endpoint was called with a sub-tenant token |
+
+### 404 — Not found
+
+| Message | Cause |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `The user record was not found` | No user matches the given `mode`/`identity` |
+| `Token not found` | The token UUID does not exist or has expired |
+| `The group record was not found` | Unknown group ID |
+| `The legal basis record was not found` | Unknown legal-basis `brief` |
+| `The API request was not found` | The `/v2/<name>` endpoint name does not exist |
+
+### 409 — Conflict
+
+| Message | Cause |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `Duplicate index: email` | Another user already holds this unique index value (email/phone/login/custom) |
+| `The role record already exists` | Create called with a name that is already taken |
+| `Duplicate tenant name` | Tenant name already in use |
+| `This user request is closed` | Approve/cancel called on a request that is no longer open |
+
+### 500 — Internal server error
+
+| Message | Cause |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `Internal error` / `Database error` | Unexpected server-side failure — check the server logs |
+| `Failed to decrypt the user record` | Storage-level failure (e.g. key mismatch) — check the server logs |
+
+Server-side error details (database errors, stack context) are **never** included in API responses — they are written to the server log and the audit trail only.
+
+## Special cases
+
+- **`UserPrelogin` captcha failure** returns HTTP `200` with `{"status":"error","message":"captcha-error"}` — the user portal login flow consumes this in-body. Always check the `status` field on prelogin responses.
+- **Public endpoints** (`UserPrelogin`, `UserLogin`, `CaptchaCreate`, `SharedRecordGet`, `TenantGetUIConf`) require no token; all other endpoints return `403` without a valid one — see [Authentication](/pro/api/authentication).
+- **Unknown endpoint names** under `/v2/` return `404` with `The API request was not found`; unknown URL paths outside `/v2/` return `404` with `endpoint is missing`.
