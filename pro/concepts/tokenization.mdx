@@ -87,6 +87,74 @@ Output:
 }
 ```
 
+## Bulk tokenization
+
+For batch workloads — migrations, nightly imports, mass detokenization — Databunker Pro creates, reads, and deletes many tokens in a single call.
+
+### Create tokens in bulk
+
+`TokenCreateBulk` takes an array of records and returns a token pair for each. `slidingtime` / `finaltime` and `unique` apply to the whole batch.
+
+```bash
+curl -X POST https://databunker.pro/v2/TokenCreateBulk \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+      { "tokentype": "creditcard", "record": "4532015112830366" },
+      { "tokentype": "creditcard", "record": "5467047429390590" }
+    ],
+    "unique": true
+  }'
+```
+
+Output:
+
+```json
+{
+  "status": "ok",
+  "created": [
+    { "tokenuuid": "550e8400-e29b-41d4-a716-446655440000", "tokenbase": "4111111111111111", "record": "4532015112830366", "tokentype": "creditcard" },
+    { "tokenuuid": "6ba7b810-9dad-11d1-80b4-00c04fd430c8", "tokenbase": "5500005555555559", "record": "5467047429390590", "tokentype": "creditcard" }
+  ]
+}
+```
+
+### Read and delete in bulk
+
+Bulk read and delete return or destroy plaintext for many records at once, so they require a short-lived **unlock UUID** as an extra authorization step. Call `BulkListUnlock` first, then pass the returned `unlockuuid` to `BulkListTokens` or `BulkDeleteTokens` along with the token UUIDs.
+
+```bash
+# 1. Obtain an unlock UUID
+curl -X POST https://databunker.pro/v2/BulkListUnlock \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>"
+# -> { "status": "ok", "unlockuuid": "e1f2a3b4-..." }
+
+# 2. Retrieve the original values
+curl -X POST https://databunker.pro/v2/BulkListTokens \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unlockuuid": "e1f2a3b4-...",
+    "tokens": ["550e8400-e29b-41d4-a716-446655440000", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"]
+  }'
+# -> { "status": "ok", "rows": [ { "tokenuuid": "...", "tokenbase": "...", "record": "...", "tokentype": "creditcard" }, ... ] }
+
+# 3. Delete tokens
+curl -X POST https://databunker.pro/v2/BulkDeleteTokens \
+  -H "X-Bunker-Token: <access-token>" \
+  -H "X-Bunker-Tenant: <tenant-name>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unlockuuid": "e1f2a3b4-...",
+    "tokens": ["550e8400-e29b-41d4-a716-446655440000", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"]
+  }'
+# -> { "status": "ok", "deleted": 2 }
+```
+
 ## Compliance and scale
 
 Format-preserving tokenization addresses three concerns at once:
