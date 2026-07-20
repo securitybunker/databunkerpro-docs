@@ -4,7 +4,7 @@ title: Multi-tenancy
 
 Databunker Pro supports multi-tenancy, allowing you to manage multiple tenants within a single instance. This document outlines the API endpoints for creating, managing, and interacting with tenants.
 
-**Note:** Multi-tenancy requires PostgreSQL as the backend database and is not supported with MySQL.
+**Note:** Multi-tenancy is supported on PostgreSQL, MySQL, and Oracle. On PostgreSQL it is enforced with native row-level security (RLS).
 
 <Tip>
 **Multi-tenancy is per-instance.** All tenants live inside the same Databunker Pro deployment and share the same physical region. If you need to keep PII inside different *legal jurisdictions* — for example because of GDPR cross-border rules, India's DPDPA, Russia's 152-FZ, or similar — multi-tenancy is not the right tool. Instead, run one Databunker Pro instance per jurisdiction and unify operations via Databunker DPO. See [Multi-jurisdiction deployment](/pro/concepts/global-deployment).

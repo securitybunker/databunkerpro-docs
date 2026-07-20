@@ -7,8 +7,9 @@ description: In today’s digital landscape, protecting sensitive customer data 
 
 **Backend storage**
 
-- **PostgreSQL**: Reliable, secure backend for encrypted data storage, with row-level security for true multi-tenant isolation.
-- **MySQL**: Secure backend for encrypted data storage. Note: Multi-tenancy is not supported with MySQL.
+- **PostgreSQL**: Reliable, secure backend for encrypted data storage. Supports multi-tenancy using RLS.
+- **MySQL**: Secure backend for encrypted data storage. Supports multi-tenancy.
+- **Oracle**: Secure backend for encrypted data storage. Supports multi-tenancy.
 - **Redis**: Used for encrypted storage of session information for faster, secure access.
 
 **Encryption and key management**
@@ -49,7 +50,7 @@ description: In today’s digital landscape, protecting sensitive customer data 
 **Access control**
 
 - Fine-grained, token-based API authentication.
-- Multi-tenant separation using PostgreSQL Row-Level Security (RLS). Note: Multi-tenancy requires PostgreSQL and is not supported with MySQL.
+- Multi-tenant separation is supported on PostgreSQL, MySQL, and Oracle. On PostgreSQL it uses native Row-Level Security (RLS).
 - Default prevention of bulk data extraction.
 
 **Threat protection**
