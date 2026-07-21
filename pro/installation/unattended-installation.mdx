@@ -56,7 +56,7 @@ REDIS_USER_PASS=<redis password>
 `DATABUNKER_SETUPKEY` is only needed to run the unattended install — once the vault is installed you can remove it, and the setup endpoint stays disabled. **`DATABUNKER_WRAPPINGKEY`, on the other hand, must persist for the life of the vault**: it is the wrapping key that unlocks the encrypted database on every start, so the container cannot open the vault without it. The `PGSQL_*` and `REDIS_*` keys point the container at your backing stores.
 
 <Warning>
-Treat `DATABUNKER_SETUPKEY` as a **credential** — anyone who can reach the service with it can initialise the vault. Use a long random value, keep it in your secrets manager, and restrict network access to the service during setup.
+`DATABUNKER_SETUPKEY` only matters during the install, which is a one-time operation: anyone who reaches the service with it can install the vault, so use a long random value. Once the vault is installed the setup endpoint is disabled and the key stops being sensitive — you can safely remove it.
 </Warning>
 
 Then reference that file from the Databunker Pro service in `docker-compose.yml`:
