@@ -1,0 +1,200 @@
+---
+title: Partial search
+---
+
+Databunker Pro stores every user record **encrypted or hashed**. This is what keeps your PII safe at rest, but it also means the vault cannot run a classic `LIKE '%john%'` substring query the way a plaintext SQL database can — there is no readable text to scan. As a result, partial and free-text search is intentionally limited.
+
+Databunker Pro offers two complementary approaches to work around this constraint:
+
+1. **Fuzzy search** — for approximate, single-field matching (typos, misspellings, accent characters).
+2. **Group-based partial search** — for pre-indexing users by attributes such as first name or family name so they can be listed later.
+
+## Why partial search is hard
+
+Because records are encrypted or hashed, Databunker Pro can only match on values it can deterministically compute or index. It cannot:
+
+- Scan arbitrary substrings inside an encrypted field
+- Run wildcard (`%...%`) queries across the whole dataset
+- Rank results by arbitrary free text against ciphertext
+
+The two mechanisms below give you practical partial-search behavior while keeping the data encrypted.
+
+## Option 1: Fuzzy search
+
+Fuzzy search is the right tool when you need **approximate matching on a single field** — for example, a support agent typing a login or email with a typo, or a name written with different accent characters (`José` vs `Jose`).
+
+It is well suited for:
+
+- ✅ Spelling mistakes and typos
+- ✅ Accent and diacritic variations
+- ✅ Minor formatting differences
+
+Fuzzy search runs through the `/v2/UserSearch` endpoint and requires a bulk-unlock UUID. See the dedicated [Fuzzy search](/pro/concepts/fuzzy-search) page for the full API and SDK examples.
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/UserSearch" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "login",
+    "identity": "jon",
+    "unlockuuid": "your-unlock-uuid"
+  }'
+```
+
+<Note>
+Fuzzy search matches variations of a value you already roughly know. It is not designed to enumerate every user whose name contains a given substring — for that, use the group-based approach below.
+</Note>
+
+## Option 2: Group-based partial search
+
+Databunker Pro includes a **user group API**. By linking each user to one or more groups at creation (or update) time, you effectively build your own search index without ever exposing the underlying encrypted values.
+
+The idea: when you store a user, also add them to a group named after the attribute you want to search on later. For a user **John Doe**, link them to two groups:
+
+- A group for the first name — e.g. `name:john`
+- A group for the family name — e.g. `family:doe`
+
+Later, "searching" for everyone named *John* becomes listing the members of the `name:john` group — a fast, exact lookup that never decrypts data to scan it.
+
+### Step 1: Create the groups
+
+Create a group once per attribute value. You can create groups up front or lazily the first time a value appears.
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/GroupCreate" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "groupname": "name:john",
+    "groupdesc": "Users with first name John"
+  }'
+```
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/GroupCreate" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "groupname": "family:doe",
+    "groupdesc": "Users with family name Doe"
+  }'
+```
+
+### Step 2: Link the user to the groups
+
+When you create or update a user, add them to the relevant groups with `/v2/GroupAddUser`. The user is identified by any supported `mode` (`login`, `token`, `email`, `phone`, `custom`).
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/GroupAddUser" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "email",
+    "identity": "john.doe@example.com",
+    "groupname": "name:john"
+  }'
+```
+
+```bash
+curl -X POST "https://your-databunker-instance/v2/GroupAddUser" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "mode": "email",
+    "identity": "john.doe@example.com",
+    "groupname": "family:doe"
+  }'
+```
+
+John Doe now belongs to both `name:john` and `family:doe`.
+
+### Step 3: List users by attribute
+
+To find everyone whose first name is *John*, list the members of the `name:john` group. Group listing uses the bulk-unlock mechanism, so first request a short-lived unlock UUID, then call `/v2/BulkListGroupUsers`.
+
+```bash
+# Step 1: request a bulk-unlock UUID (valid for 60 seconds)
+curl -X POST "https://your-databunker-instance/v2/BulkListUnlock" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN"
+
+# Step 2: list the members of the group
+curl -X POST "https://your-databunker-instance/v2/BulkListGroupUsers" \
+  -H "Content-Type: application/json" \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -d '{
+    "groupname": "name:john",
+    "unlockuuid": "your-unlock-uuid",
+    "offset": 0,
+    "limit": 10
+  }'
+```
+
+To narrow to **John Doe** specifically, list both groups and intersect the results by user `token` on the client side.
+
+### JavaScript/TypeScript example (Official SDK)
+
+```javascript
+import DatabunkerproAPI from "databunkerpro-js";
+
+const client = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "your-token"
+);
+
+// Index a user under first-name and family-name groups
+async function indexUser(email, firstName, familyName) {
+  await client.makeRequest("GroupCreate", { groupname: `name:${firstName}` });
+  await client.makeRequest("GroupCreate", { groupname: `family:${familyName}` });
+
+  await client.makeRequest("GroupAddUser", {
+    mode: "email",
+    identity: email,
+    groupname: `name:${firstName}`,
+  });
+  await client.makeRequest("GroupAddUser", {
+    mode: "email",
+    identity: email,
+    groupname: `family:${familyName}`,
+  });
+}
+
+// List everyone with a given first name
+async function findByFirstName(firstName) {
+  const unlock = await client.bulkListUnlock();
+  const response = await client.makeRequest("BulkListGroupUsers", {
+    groupname: `name:${firstName}`,
+    unlockuuid: unlock.unlockuuid,
+    limit: 100,
+  });
+  return response.rows || [];
+}
+
+await indexUser("john.doe@example.com", "john", "doe");
+const johns = await findByFirstName("john");
+console.log(`Found ${johns.length} users named John`);
+```
+
+## Choosing an approach
+
+| Need                                            | Use                        |
+| ----------------------------------------------- | -------------------------- |
+| Handle typos / misspellings on a known value    | Fuzzy search               |
+| Match accent / diacritic variations             | Fuzzy search               |
+| List all users sharing an attribute value       | Group-based partial search |
+| Combine two attributes (e.g. first + family)    | Group-based, intersect     |
+
+The two approaches are complementary: fuzzy search is best for *"I roughly know this value"*, while group indexing is best for *"list everyone who matches this attribute exactly."*
+
+## Considerations
+
+- **Normalize before indexing.** Lowercase and trim values (`name:john`, not `Name: John`) so lookups are consistent. Decide up front how to handle accents — either strip them for the group key or keep them and rely on fuzzy search for variants.
+- **Exact keys, not substrings.** Group lookups match the full attribute value. If you need prefix matching (`joh` → `john`), index additional keys (for example n-grams or prefixes) as separate groups.
+- **Group cardinality.** Every distinct value becomes a group. For high-cardinality fields this can create many groups — index only the attributes you actually search on.
+- **Security is preserved.** Group listing still goes through the [bulk-unlock](/pro/concepts/select-security) mechanism and is subject to your access-control policies, so this pattern does not weaken Databunker Pro's security model. Records remain encrypted throughout.
+- **Keep the index in sync.** Remove a user from a group with `/v2/GroupDeleteUser` when the underlying attribute changes, and add them to the new group.
+
+## Conclusion
+
+Because Databunker Pro keeps records encrypted and hashed, true substring search is not possible — but you rarely need it. **Fuzzy search** covers approximate matching on values you already know, and the **user group API** lets you build lightweight, exact-match indexes for the attributes you care about. Together they deliver practical partial-search behavior without ever compromising the encryption that protects your users' data.

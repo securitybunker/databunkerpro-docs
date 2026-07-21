@@ -52,6 +52,7 @@
                   "pro/concepts/tokenization",
                   "pro/concepts/file-vault",
                   "pro/concepts/fuzzy-search",
+                  "pro/concepts/partial-search",
                   "pro/concepts/record-versioning",
                   "pro/concepts/select-security",
                   "pro/concepts/sub-accounts",
