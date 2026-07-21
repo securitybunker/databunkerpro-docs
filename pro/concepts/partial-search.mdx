@@ -61,12 +61,15 @@ Later, "searching" for everyone named *John* becomes listing the members of the 
 
 Create a group once per attribute value. You can create groups up front or lazily the first time a value appears.
 
+`GroupCreate` accepts an optional **`grouptype`** field — a short label (up to 30 characters) that classifies the group. Use it to tag each index group by the attribute it represents, e.g. `firstname` or `familyname`. This makes your index self-describing: `GroupGet` and `GroupListAllGroups` return `grouptype`, so you can list all your groups and filter them by type on the client side. If you omit `grouptype`, it defaults to `users`.
+
 ```bash
 curl -X POST "https://your-databunker-instance/v2/GroupCreate" \
   -H "Content-Type: application/json" \
   -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
   -d '{
     "groupname": "name:john",
+    "grouptype": "firstname",
     "groupdesc": "Users with first name John"
   }'
 ```
@@ -77,9 +80,14 @@ curl -X POST "https://your-databunker-instance/v2/GroupCreate" \
   -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
   -d '{
     "groupname": "family:doe",
+    "grouptype": "familyname",
     "groupdesc": "Users with family name Doe"
   }'
 ```
+
+<Note>
+`grouptype` is a classifying label, not a namespace. Group **names** must be unique across your whole tenant regardless of their type, so keep the attribute value in the group name (`name:john`, `family:doe`) to avoid collisions — for example when a first name and a family name are the same word.
+</Note>
 
 ### Step 2: Link the user to the groups
 
@@ -145,8 +153,14 @@ const client = new DatabunkerproAPI(
 
 // Index a user under first-name and family-name groups
 async function indexUser(email, firstName, familyName) {
-  await client.makeRequest("GroupCreate", { groupname: `name:${firstName}` });
-  await client.makeRequest("GroupCreate", { groupname: `family:${familyName}` });
+  await client.makeRequest("GroupCreate", {
+    groupname: `name:${firstName}`,
+    grouptype: "firstname",
+  });
+  await client.makeRequest("GroupCreate", {
+    groupname: `family:${familyName}`,
+    grouptype: "familyname",
+  });
 
   await client.makeRequest("GroupAddUser", {
     mode: "email",
@@ -191,6 +205,7 @@ The two approaches are complementary: fuzzy search is best for *"I roughly know 
 
 - **Normalize before indexing.** Lowercase and trim values (`name:john`, not `Name: John`) so lookups are consistent. Decide up front how to handle accents — either strip them for the group key or keep them and rely on fuzzy search for variants.
 - **Exact keys, not substrings.** Group lookups match the full attribute value. If you need prefix matching (`joh` → `john`), index additional keys (for example n-grams or prefixes) as separate groups.
+- **Tag groups with `grouptype`.** Set a `grouptype` (max 30 characters, defaults to `users`) when creating each index group so you can tell your index groups apart from ordinary application groups and filter them by category via `GroupListAllGroups`. Remember it is a label only — group names must still be unique.
 - **Group cardinality.** Every distinct value becomes a group. For high-cardinality fields this can create many groups — index only the attributes you actually search on.
 - **Security is preserved.** Group listing still goes through the [bulk-unlock](/pro/concepts/select-security) mechanism and is subject to your access-control policies, so this pattern does not weaken Databunker Pro's security model. Records remain encrypted throughout.
 - **Keep the index in sync.** Remove a user from a group with `/v2/GroupDeleteUser` when the underlying attribute changes, and add them to the new group.

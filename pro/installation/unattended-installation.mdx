@@ -34,13 +34,49 @@ The install runs once: call `/autoinstall` **only** when `/dbstatus` explicitly 
 The `/autoinstall` endpoint is only available when a setup key is configured. Set **`DATABUNKER_SETUPKEY`** (and the persistent **`DATABUNKER_WRAPPINGKEY`**) in the container environment before starting Databunker Pro — for Docker Compose, in `.env/databunker.env`:
 
 ```sh
-DATABUNKER_WRAPPINGKEY=<48-hex-character master key>
+# Enables unattended install
+DATABUNKER_WRAPPINGKEY=<48-hex-character wrapping key>
 DATABUNKER_SETUPKEY=<a long random secret>
+
+# Database connection
+PGSQL_HOST=postgresql
+PGSQL_PORT=5432
+PGSQL_USER_NAME=bunkeruser
+PGSQL_USER_PASS=<database password>
+PGSQL_DATABASE=databunkerdb
+PGSQL_SSL_MODE=disable
+
+# Redis connection
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_USER_NAME=default
+REDIS_USER_PASS=<redis password>
 ```
+
+`DATABUNKER_SETUPKEY` is only needed to run the unattended install — once the vault is installed you can remove it, and the setup endpoint stays disabled. **`DATABUNKER_WRAPPINGKEY`, on the other hand, must persist for the life of the vault**: it is the wrapping key that unlocks the encrypted database on every start, so the container cannot open the vault without it. The `PGSQL_*` and `REDIS_*` keys point the container at your backing stores.
 
 <Warning>
 Treat `DATABUNKER_SETUPKEY` as a **credential** — anyone who can reach the service with it can initialise the vault. Use a long random value, keep it in your secrets manager, and restrict network access to the service during setup.
 </Warning>
+
+Then reference that file from the Databunker Pro service in `docker-compose.yml`:
+
+```yaml
+services:
+  databunkerpro:
+    image: securitybunker/databunkerpro:latest
+    restart: unless-stopped
+    env_file:
+      - .env/databunker.env
+    entrypoint: /bin/sh
+    command: -c "/databunker/bin/databunkerpro -db databunkerdb -conf /databunker/conf/databunker.yaml"
+    volumes:
+      - ../conf/databunker.yaml:/databunker/conf/databunker.yaml
+    ports:
+      - "3000:3000"
+```
+
+`DATABUNKER_WRAPPINGKEY` and `DATABUNKER_SETUPKEY` are loaded from `.env/databunker.env`, so the `/autoinstall` endpoint is enabled as soon as the container comes up.
 
 ## Run the unattended install
 
