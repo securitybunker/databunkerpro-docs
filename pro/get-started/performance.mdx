@@ -13,7 +13,7 @@ This page gives architects the numbers needed to size a Databunker Pro deploymen
 - **Detokenisation is fast: ~14 ms** per single-record `UserGet`, regardless of vault size.
 - **Write throughput depends on scale.** At small scale it is limited by the **application tier** and one instance does ~5,800 records/sec. At tens of millions of rows it is limited by **database CPU** and plateaus at **~12,000 records/sec** — so you size the **database** for large vaults, not the app tier.
 - **Rule of thumb:** pick your database and application instances from the [sizing guide](#how-to-size-your-deployment) by record count. For most workloads a single Databunker Pro instance is already more than enough.
-- **Running on Oracle instead?** A comparable 10 M run on RDS Oracle SE2 is included below: similar (slightly faster) read latency, about **40% of PostgreSQL's write ceiling** (PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`), and roughly **3× the on-disk size** (`CLOB` storage). See [Oracle Database backend (10 M)](#oracle-database-backend-10-m).
+- **Running on Oracle instead?** A comparable 10 M run on RDS Oracle SE2 is included below: similar (slightly faster) read latency, **~2.4× slower writes at peak** (PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`), and roughly **3× the on-disk size** (`CLOB` storage). See [Oracle Database backend (10 M)](#oracle-database-backend-10-m).
 
 ## What we measured
 
@@ -144,7 +144,7 @@ Databunker Pro also runs on [Oracle Database](/pro/installation/oracle-database)
 
 **What the numbers say:**
 
-- **Writes reach ~40% of PostgreSQL's ceiling.** Oracle sustained **~5,100 rec/s** — mainly because **PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`** for writing a batch. The Oracle load was **disk-IOPS-bound** — write IOPS ran near the 12,000 provisioned cap while CPU sat at ~18%. Unlike PostgreSQL, which is *app*-bound at 10 M and scales toward ~12,000 rec/s by adding stateless app instances, Oracle was already **database-bound on one instance**; pushing past it needs **more provisioned IOPS**, not more workers.
+- **At peak, Oracle writes are about 2.4× slower than PostgreSQL** (~5,100 rec/s vs ~12,000) — mainly because **PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`** for writing a batch. On a single instance the two are close (~5,100 vs PostgreSQL's ~5,800 here), but Oracle's load was already **disk-IOPS-bound** (write IOPS near the 12,000 cap while CPU sat at ~18%), so it stays around 5,100 rec/s — whereas PostgreSQL is *app*-bound at 10 M and scales toward ~12,000 rec/s by adding stateless app instances. Pushing Oracle higher needs **more provisioned IOPS**, not more workers.
 - **Reads are faster: ~6 ms** detok p50 vs ~14 ms on PostgreSQL — helped by the newer `m8i` CPU. Detokenisation is a hashed-index point lookup either way.
 - **Storage is ~3× heavier: ~16.5 KB/record** vs ~5.7 KB. Oracle stores the encrypted profile as a `CLOB`, which is far less space-efficient than PostgreSQL's TOAST — budget storage accordingly. **Indexes are the same ~140 B/record**; the index strategy (`token` + retention + `email`) is identical across engines.
 
