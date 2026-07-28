@@ -11,7 +11,7 @@ This page gives architects the numbers needed to size a Databunker Pro deploymen
 - **Storage is linear and predictable: ~5.7 KB per encrypted 120-field record.** Multiply by your record count to size the volume (10 M ≈ 59 GB, 100 M ≈ 585 GB).
 - **Index size scales with how many fields you make searchable — plan for *your* field set.** This benchmark indexed **only `email`** (plus the always-present `token` and retention indexes) → ~139 bytes/record. **Each additional searchable field you index (`phone`, `login`, `custom`) adds another index: budget roughly +40–50 bytes/record and more write CPU per field.** Size the database RAM to cache *all* your indexes (with email only, 100 M ≈ 14 GB; cache-hit ≥ 97%).
 - **Detokenisation is fast: ~14 ms** per single-record `UserGet`, regardless of vault size.
-- **Write throughput depends on scale.** At small scale it is limited by the **application tier** and one instance does ~5,800 records/sec. At tens of millions of rows it is limited by **database CPU** and plateaus at **~12,000 records/sec** — so you size the **database** for large vaults, not the app tier.
+- **Write speed depends on scale.** At small scale the **Databunker Pro app** is the limit and one instance does ~5,800 records/sec. At tens of millions of rows the **database** becomes the limit and write speed tops out around **~12,000 records/sec** — so you size the **database** for large vaults, not the app tier.
 - **Rule of thumb:** pick your database and application instances from the [sizing guide](#how-to-size-your-deployment) by record count. For most workloads a single Databunker Pro instance is already more than enough.
 - **Running on Oracle instead?** A comparable 10 M run on RDS Oracle SE2 is included below: similar (slightly faster) read latency, **~2.4× slower writes at peak** (PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`), and roughly **3× the on-disk size** (`CLOB` storage). See [Oracle Database backend (10 M)](#oracle-database-backend-10-m).
 
@@ -21,9 +21,9 @@ Three runs, same workload, increasing scale. In every run Databunker Pro (statel
 
 | Run | Records | Application tier | Dedicated RDS database | Write result |
 | --- | ------- | ---------------- | ---------------------- | ------------ |
-| **A** | 10 M | 1 × `m6i.2xlarge` | `db.m6i.2xlarge` — 8 vCPU / 32 GB | ~5,800 rec/s — **app-bound** |
-| **B** | 50 M | 4 × `m6i.2xlarge` | `db.m6i.4xlarge` — 16 vCPU / 64 GB | ~11,800 rec/s — **database-bound** |
-| **C** | 100 M | 5 × `m6i.2xlarge` | `db.m6i.8xlarge` — 32 vCPU / 128 GB | ~11,900 rec/s — **database-bound** |
+| **A** | 10 M | 1 × `m6i.2xlarge` | `db.m6i.2xlarge` — 8 vCPU / 32 GB | ~5,800 rec/s — **limited by the app** |
+| **B** | 50 M | 4 × `m6i.2xlarge` | `db.m6i.4xlarge` — 16 vCPU / 64 GB | ~11,800 rec/s — **limited by the database** |
+| **C** | 100 M | 5 × `m6i.2xlarge` | `db.m6i.8xlarge` — 32 vCPU / 128 GB | ~11,900 rec/s — **limited by the database** |
 
 **Common workload**
 
@@ -44,8 +44,8 @@ Redis is used only for transient session state and is **not** exercised by bulk 
 | **10 M** | 58.5 GB | ~5.7 KB | 1.4 GB | **~5,800 rec/s** (1 instance) | ~14 ms | app tier (RDS ~20% CPU) |
 | **50 M** | 292 GB | ~5.7 KB | 6.9 GB | **~11,800 rec/s** (4 instances) | — | database (RDS ~80% CPU) |
 | **100 M** | 584 GB | ~5.7 KB | 13.9 GB | **~11,900 rec/s** (5 instances) | — | database (RDS ~82% CPU) |
-| 150 M | ~875 GB | ~5.7 KB | ~21 GB | database-bound *(projected)* | — | database |
-| 200 M | ~1.17 TB | ~5.7 KB | ~28 GB | database-bound *(projected)* | — | database |
+| 150 M | ~875 GB | ~5.7 KB | ~21 GB | limited by the database *(projected)* | — | database |
+| 200 M | ~1.17 TB | ~5.7 KB | ~28 GB | limited by the database *(projected)* | — | database |
 
 All runs completed with **zero failed batches**. Per-record storage is essentially constant across scale — storage planning is simple linear math.
 
@@ -53,7 +53,7 @@ All runs completed with **zero failed batches**. Per-record storage is essential
 
 This is the single most important thing to understand when sizing Databunker Pro.
 
-**At small scale, the application tier is the limit.** Encrypting and hash-indexing each record is CPU work done by Databunker Pro. At 10 M records one instance used ~3.2 of its 8 cores while the database sat at just ~20% CPU. Here, **adding Databunker Pro instances raises throughput** — the stateless app tier scales cleanly (we verified near-linear scaling from 1 to 6 instances on a small vault), and the database has plenty of headroom.
+**At small scale, the application tier is the limit.** Encrypting and hash-indexing each record is CPU work done by Databunker Pro. At 10 M records one instance used ~3.2 of its 8 cores while the database sat at just ~20% CPU. Here, **adding Databunker Pro instances raises throughput** — the stateless app tier scales cleanly (we verified throughput grew almost proportionally from 1 to 6 instances on a small vault), and the database has plenty of spare capacity.
 
 **At large scale, the database CPU is the limit.** As the table grows, every insert costs the database more (deeper B-tree indexes, page splits, WAL, autovacuum). By tens of millions of rows this dominates:
 
@@ -62,18 +62,18 @@ This is the single most important thing to understand when sizing Databunker Pro
 | RDS instance | `db.m6i.2xlarge` (8 vCPU) | `db.m6i.4xlarge` (16 vCPU) | `db.m6i.8xlarge` (32 vCPU) |
 | **RDS CPU (avg / peak)** | **20% / 33%** | **80% / 95%** | **82% / 95%** |
 | Aggregate write | ~5,800 rec/s | ~11,800 rec/s | ~11,900 rec/s |
-| App CPU (per instance) | ~3.2 cores | saturating DB | saturating DB |
+| App CPU (per instance) | ~3.2 cores | maxing out the database | maxing out the database |
 
-**Throughput plateaus at ~12,000 records/sec.** Note that 50 M and 100 M delivered almost the same throughput **even though the 100 M run used twice the database vCPU** (32 vs 16). Doubling the database didn't help because the per-insert cost had also doubled with the larger index. To push past this plateau, database vCPU has to grow *faster* than the table.
+**Write speed tops out around ~12,000 records/sec.** Note that 50 M and 100 M delivered almost the same throughput **even though the 100 M run used twice the database vCPU** (32 vs 16). Doubling the database didn't help because the per-insert cost had also doubled with the larger index. To go faster than this, database vCPU has to grow *faster* than the table.
 
 **What this means for you:**
 
 - **Steady-state and real-time workloads** are nowhere near these limits — one Databunker Pro instance on a modest database handles them comfortably.
-- **Bulk backfills of very large vaults are database-bound and take hours** (100 M ≈ ~2.3 h here). Size the **database** for the row count, and don't expect more app instances to speed it up once RDS is CPU-saturated.
+- **Bulk backfills of very large vaults are limited by the database and take hours** (100 M ≈ ~2.3 h here). Size the **database** for the row count, and don't expect more app instances to speed it up once the database is at full CPU.
 
 ## How to size your deployment
 
-Pick the row you're targeting. Storage scales at ~5.7 KB/record. Index RAM depends on **how many fields you index** — the numbers below assume the benchmark's set (`token` + retention + **one** search index, `email`) ≈ ~139 bytes/record; **add ~40–50 bytes/record for each extra searchable field** you index (`phone`, `login`, `custom`). The database instance is the throughput limiter at scale, so it's sized for **vCPU (write speed) and RAM (index cache)**. Application nodes are stateless `m6i.2xlarge` (Databunker Pro uses ~3 vCPU at full load) — add them to speed up bulk loads only until the database reaches ~70–80% CPU.
+Pick the row you're targeting. Storage scales at ~5.7 KB/record. Index RAM depends on **how many fields you index** — the numbers below assume the benchmark's set (`token` + retention + **one** search index, `email`) ≈ ~139 bytes/record; **add ~40–50 bytes/record for each extra searchable field** you index (`phone`, `login`, `custom`). The database is what limits speed at scale, so it's sized for **vCPU (write speed) and RAM (index cache)**. Application nodes are stateless `m6i.2xlarge` (Databunker Pro uses ~3 vCPU at full load) — add them to speed up bulk loads only until the database reaches ~70–80% CPU.
 
 | User records | RDS database instance | RDS storage (gp3) | Index size, **email only** (vs instance RAM) | App instances | Confidence |
 | ------------ | --------------------- | ----------------- | -------------------------------------------- | ------------- | ---------- |
@@ -83,13 +83,13 @@ Pick the row you're targeting. Storage scales at ~5.7 KB/record. Index RAM depen
 | **100–150 M** | `db.r6i.8xlarge` — 32 vCPU / 256 GB | 1.1 TB | ~21 GB (of 256) | 4–5 × `m6i.2xlarge` | projected |
 | **150–200 M** | `db.r6i.8xlarge` or **Aurora PostgreSQL** | 1.3–1.5 TB | ~28 GB | 4–6 × `m6i.2xlarge` | projected |
 
-The **index column is for the benchmark's index set only** (`token` + retention + the single `email` search index). Note the large headroom — 14 GB of indexes on a 128 GB instance — because these instances are chosen for **write vCPU**, not index RAM, so they hold several more indexes comfortably. **If you index more fields, recompute:** ~139 bytes/record (email only) **+ ~40–50 bytes/record per additional searchable field** (`phone`, `login`, `custom`), × your record count, and confirm it still fits in RAM. Storage and write vCPU are unaffected by this — only index RAM and per-insert write cost grow.
+The **index column is for the benchmark's index set only** (`token` + retention + the single `email` search index). Note the large spare capacity — 14 GB of indexes on a 128 GB instance — because these instances are chosen for **write vCPU**, not index RAM, so they hold several more indexes comfortably. **If you index more fields, recompute:** ~139 bytes/record (email only) **+ ~40–50 bytes/record per additional searchable field** (`phone`, `login`, `custom`), × your record count, and confirm it still fits in RAM. Storage and write vCPU are unaffected by this — only index RAM and per-insert write cost grow.
 
 **Three sizing rules**
 
-1. **Storage** = 5.7 KB × records, plus **30–40% headroom** for WAL, bloat, and backups.
+1. **Storage** = 5.7 KB × records, plus **30–40% spare space** for WAL, bloat, and backups.
 2. **RAM** must exceed your **total index size + hot rows** so lookups stay cached. Index storage = `token` + retention + **one per searchable field**. With only `email` indexed this was ~139 bytes/record (100 M ≈ 14 GB; cache-hit ≥ 97%); **add ~40–50 bytes/record for every extra field you index** (`phone`, `login`, `custom`). Multiply by your record count.
-3. **Database vCPU** is the sustained-write limiter at scale — grow it (or move to **Aurora** for storage auto-scaling and read replicas) before adding app instances once RDS passes ~70% CPU.
+3. **Database vCPU** is what limits sustained write speed at scale — grow it (or move to **Aurora** for storage auto-scaling and read replicas) before adding app instances once RDS passes ~70% CPU.
 
 ## Reads: detokenisation latency
 
@@ -120,7 +120,7 @@ The two figures that scale with your design:
 
 ## Write latency: bulk vs single record
 
-The ~0.17 ms per record at 10 M is **amortised inside a 4,000-record bulk request**. Individual `UserCreateBulk` calls take longer end-to-end (p50 ~4.5 s for a 4,000-record batch at 10 M, growing with table size), and **single-record synchronous writes** are typically 3–10 ms over a real network because each call carries its own connection, auth, and transaction overhead.
+The ~0.17 ms per record at 10 M is **averaged across a 4,000-record bulk request**. Individual `UserCreateBulk` calls take longer end-to-end (p50 ~4.5 s for a 4,000-record batch at 10 M, growing with table size), and **single-record synchronous writes** are typically 3–10 ms over a real network because each call carries its own connection, auth, and transaction overhead.
 
 - **Backfills / batch flows:** use `UserCreateBulk`.
 - **Real-time API flows:** assume single-digit-millisecond single-record writes; production throughput = `concurrency ÷ per-call latency`.
@@ -129,11 +129,11 @@ The ~0.17 ms per record at 10 M is **amortised inside a 4,000-record bulk reques
 
 Databunker Pro also runs on [Oracle Database](/pro/installation/oracle-database). We repeated the 10 M user-record benchmark on **RDS for Oracle** so Oracle shops have a directly comparable number.
 
-**Why a different instance class.** The PostgreSQL runs above use `db.m6i.2xlarge`. In `eu-central-1`, RDS **Oracle Standard Edition 2 does not offer the `m6i` family** — its current-generation `m`-class options are `m5` and `m8i`. We therefore used **`db.m8i.2xlarge`**, the closest current-generation equivalent at the **same 8 vCPU / 32 GB**. So this is PostgreSQL on `m6i.2xlarge` vs Oracle on `m8i.2xlarge` — matched on vCPU, RAM, storage (400 GB gp3 / 12,000 IOPS), and TLS, one CPU generation apart. (We separately confirmed the instance size doesn't move Oracle's result: an identical run on `db.r6i.2xlarge` with **double the RAM, 64 GB**, produced the same throughput — the load is disk-IOPS-bound, not memory-bound.)
+**Why a different instance class.** The PostgreSQL runs above use `db.m6i.2xlarge`. In `eu-central-1`, RDS **Oracle Standard Edition 2 does not offer the `m6i` family** — its current-generation `m`-class options are `m5` and `m8i`. We therefore used **`db.m8i.2xlarge`**, the closest current-generation equivalent at the **same 8 vCPU / 32 GB**. So this is PostgreSQL on `m6i.2xlarge` vs Oracle on `m8i.2xlarge` — matched on vCPU, RAM, storage (400 GB gp3 / 12,000 IOPS), and TLS, one CPU generation apart. (We separately confirmed the instance size doesn't move Oracle's result: an identical run on `db.r6i.2xlarge` with **double the RAM, 64 GB**, produced the same throughput — the load is limited by disk I/O, not memory.)
 
 | Metric (10 M) | PostgreSQL 16 — `db.m6i.2xlarge` | Oracle SE2 19c — `db.m8i.2xlarge` |
 | --- | --- | --- |
-| Sustained bulk write | ~5,800 rec/s — **app-bound** | **~5,100 rec/s** — **DB-IOPS-bound** |
+| Sustained bulk write | ~5,800 rec/s — **limited by the app** | **~5,100 rec/s** — **limited by disk I/O** |
 | Detok p50 / p95 / p99 | ~14 / 15 / 16 ms | **~6.3 / 7.0 / 7.6 ms** |
 | Total database size | 58.5 GB | **169 GB** |
 | Per-record on disk | ~5.7 KB | **~16.5 KB** |
@@ -144,7 +144,7 @@ Databunker Pro also runs on [Oracle Database](/pro/installation/oracle-database)
 
 **What the numbers say:**
 
-- **At peak, Oracle writes are about 2.4× slower than PostgreSQL** (~5,100 rec/s vs ~12,000) — mainly because **PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`** for writing a batch. On a single instance the two are close (~5,100 vs PostgreSQL's ~5,800 here), but Oracle's load was already **disk-IOPS-bound** (write IOPS near the 12,000 cap while CPU sat at ~18%), so it stays around 5,100 rec/s — whereas PostgreSQL is *app*-bound at 10 M and scales toward ~12,000 rec/s by adding stateless app instances. Pushing Oracle higher needs **more provisioned IOPS**, not more workers.
+- **At peak, Oracle writes are about 2.4× slower than PostgreSQL** (~5,100 rec/s vs ~12,000) — mainly because **PostgreSQL's multi-row `INSERT` is more efficient than Oracle's `INSERT ALL`** for writing a batch. On a single instance the two are close (~5,100 vs PostgreSQL's ~5,800 here), but Oracle's load was already **limited by disk I/O** (write IOPS near the 12,000 cap while CPU sat at ~18%), so it stays around 5,100 rec/s — whereas PostgreSQL is *limited by the app* at 10 M and scales toward ~12,000 rec/s by adding stateless app instances. Pushing Oracle higher needs **more provisioned IOPS**, not more workers.
 - **Reads are faster: ~6 ms** detok p50 vs ~14 ms on PostgreSQL — helped by the newer `m8i` CPU. Detokenisation is a hashed-index point lookup either way.
 - **Storage is ~3× heavier: ~16.5 KB/record** vs ~5.7 KB. Oracle stores the encrypted profile as a `CLOB`, which is far less space-efficient than PostgreSQL's TOAST — budget storage accordingly. **Indexes are the same ~140 B/record**; the index strategy (`token` + retention + `email`) is identical across engines.
 
@@ -163,7 +163,7 @@ Start from the open-source Python load scripts in the [`databunkerpro-python`](h
   <Step title="Provision">Dedicated managed PostgreSQL (RDS / Aurora / Cloud SQL) plus a separate application host in the same VPC.</Step>
   <Step title="Match your payload">Edit the profile shape in `bulk_user_creator.py` to the JSON your application actually sends.</Step>
   <Step title="Load">Run the loader co-located with Databunker Pro, with multiple concurrent workers (and multiple instances for large loads).</Step>
-  <Step title="Measure">Record sustained records/sec, p50/p95/p99 bulk latency, **database CPU and IOPS**, and **application-tier CPU** — whichever is saturated is your bottleneck.</Step>
+  <Step title="Measure">Record sustained records/sec, p50/p95/p99 bulk latency, **database CPU and IOPS**, and **application-tier CPU** — whichever is maxed out is your bottleneck.</Step>
   <Step title="Read test">Run `bulk_user_fetcher.py` against the same vault to capture `UserGet` latency and throughput.</Step>
 </Steps>
 
