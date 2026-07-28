@@ -33,7 +33,8 @@
                   "pro/installation/docker-compose",
                   "pro/installation/kubernetes-helm",
                   "pro/installation/generate-admin-credentials",
-                  "pro/installation/unattended-installation"
+                  "pro/installation/unattended-installation",
+                  "pro/installation/oracle-database"
                 ]
               },
               {

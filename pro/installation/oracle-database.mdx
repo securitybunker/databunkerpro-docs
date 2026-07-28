@@ -1,0 +1,154 @@
+---
+title: Oracle Database backend
+sidebarTitle: Oracle Database
+description: Run Databunker Pro on Oracle Database — supported editions, connection settings, schema bootstrap, and a complete AWS RDS for Oracle setup including TLS.
+---
+
+Databunker Pro stores its encrypted vault in a SQL database. Alongside PostgreSQL (the default) and MySQL, it supports **Oracle Database**. The Oracle backend is built into the standard image and selected automatically at startup when the **`ORACLE_HOST`** environment variable is set — there is no separate build or plugin.
+
+The driver is the pure-Go [`go-ora`](https://github.com/sijms/go-ora) client.
+
+## Choose an edition
+
+Before you provision, pick the edition that matches the features you need.
+
+| Feature | Standard Edition 2 (SE2) | Enterprise Edition (EE) |
+| --- | --- | --- |
+| User-record vault (tokenize/detokenize user profiles) | ✅ | ✅ |
+| Format-preserving tokenization (e.g. credit cards) | ❌ | ✅ |
+
+Format-preserving tokenization stores its data in a **range-partitioned `tokens` table**, and table partitioning is an **Enterprise Edition** option — it is not available in SE2 (or in any release, including 23ai, without EE). On SE2, Databunker Pro creates the full user-record schema and runs normally; the partitioned `tokens` table is **not** created, so the [format-preserving tokenization](/pro/concepts/tokenization) feature is unavailable.
+
+<Note>
+**Rule of thumb:** If you only tokenize **user records**, **Standard Edition 2** is enough — and on AWS RDS it is available with a bundled license (no Oracle license to procure). If you need **format-preserving tokens** (credit cards, deterministic field tokens), use **Enterprise Edition**.
+</Note>
+
+## Connection settings
+
+Point Databunker Pro at Oracle with these environment variables:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `ORACLE_HOST` | ✅ | Hostname of the Oracle listener. Setting this selects the Oracle backend. |
+| `ORACLE_PORT` | | Listener port. Default `1521`; use `2484` for TLS (TCPS). |
+| `ORACLE_SERVICE` | ✅ | Service name (or PDB name). On AWS RDS this is the DB name / SID. |
+| `ORACLE_SID` | | Alternative to `ORACLE_SERVICE` if your instance uses a SID. |
+| `ORACLE_USER_NAME` | ✅ | Application schema user (e.g. `bunkeruser`). |
+| `ORACLE_USER_PASS` | ✅ | Password for the schema user. |
+| `ORACLE_USER_PASS_FILE` | | Path to a file holding the password (takes precedence over `ORACLE_USER_PASS`). |
+| `ORACLE_SSL_MODE` | | Set to `require` to connect over TLS. Any value other than `disable`/`false` enables TLS. |
+
+<Warning>
+Oracle limits passwords to **30 bytes** and parses them as identifiers. Use a short, letter-initial, alphanumeric password for the schema user (avoid long hex strings and special characters).
+</Warning>
+
+<Note>
+When `ORACLE_SSL_MODE` enables TLS, Databunker Pro **encrypts the connection but does not currently verify the server certificate**. The transport is encrypted; server-identity verification is not performed. Keep Databunker Pro and the database on a private network.
+</Note>
+
+## Create the schema user
+
+Databunker Pro creates its own tables and indexes on first start, but it needs a **schema user to own them**. Connect as a privileged user (a DBA, or the RDS master user) and create it once:
+
+```sql
+CREATE USER bunkeruser IDENTIFIED BY "ChangeMe1234";
+GRANT CONNECT, RESOURCE TO bunkeruser;
+GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, CREATE VIEW,
+      CREATE PROCEDURE, CREATE TRIGGER TO bunkeruser;
+ALTER USER bunkeruser QUOTA UNLIMITED ON USERS;
+```
+
+Unlike PostgreSQL, Oracle has no separate `databunkerdb` database — the **schema is the namespace**, so there is nothing else to create. Then set `ORACLE_USER_NAME=bunkeruser` and `ORACLE_USER_PASS=…` and start Databunker Pro.
+
+## Docker Compose
+
+Point the Databunker Pro service at your Oracle instance through its environment file:
+
+```sh .env/databunker.env
+DATABUNKER_WRAPPINGKEY=<48-hex-character wrapping key>
+
+# Oracle connection
+ORACLE_HOST=oracle.internal
+ORACLE_PORT=1521
+ORACLE_SERVICE=ORCL
+ORACLE_USER_NAME=bunkeruser
+ORACLE_USER_PASS=ChangeMe1234
+# ORACLE_SSL_MODE=require   # and ORACLE_PORT=2484 for TLS
+
+# Redis connection
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_USER_PASS=<redis password>
+REDIS_USER_NAME=default
+```
+
+The rest of the Compose file is identical to the [Docker Compose](/pro/installation/docker-compose) guide — only the database variables change.
+
+## AWS RDS for Oracle
+
+RDS is the most common managed-Oracle target. A few RDS-specific details matter.
+
+<Steps>
+<Step title="Create the instance">
+Choose the edition and licensing model:
+
+- **SE2 with a bundled license** — no Oracle license to bring:
+  ```sh
+  aws rds create-db-instance \
+    --db-instance-identifier databunker-oracle \
+    --engine oracle-se2 --license-model license-included \
+    --engine-version 19.0.0.0.ru-2026-04.spb-1.r1 \
+    --db-name ORCL \
+    --db-instance-class db.r6i.2xlarge \
+    --allocated-storage 400 --storage-type gp3 --storage-encrypted \
+    --master-username admin --manage-master-user-password \
+    --no-publicly-accessible
+  ```
+- **Enterprise Edition** uses `--engine oracle-ee` and requires **Bring-Your-Own-License** (`--license-model bring-your-own-license`). RDS does not offer EE with a bundled license.
+
+The **DB name** you pass (`ORCL`, ≤ 8 characters) becomes the `ORACLE_SERVICE` value.
+</Step>
+
+<Step title="Create the schema user">
+Connect as the RDS **master user** (not `SYS`) and run the [`CREATE USER` block above](#create-the-schema-user). The master user has the privileges to create `bunkeruser` and grant it a quota.
+</Step>
+
+<Step title="Enable TLS (recommended)">
+RDS does not serve Oracle TLS by default — you enable it with an **option group** that adds the `SSL` option and opens the **TCPS listener on port 2484** (port 1521 stays plaintext).
+
+```sh
+aws rds create-option-group --option-group-name databunker-oracle-ssl \
+  --engine-name oracle-se2 --major-engine-version 19 \
+  --option-group-description "TLS for Databunker Pro"
+
+aws rds add-option-to-option-group --option-group-name databunker-oracle-ssl \
+  --apply-immediately \
+  --options '[{"OptionName":"SSL",
+              "VpcSecurityGroupMemberships":["sg-xxxxxxxx"],
+              "OptionSettings":[
+                {"Name":"SQLNET.SSL_VERSION","Value":"1.2"},
+                {"Name":"SQLNET.CIPHER_SUITE","Value":"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"}]}]'
+```
+
+Then attach the option group to the instance (`--option-group-name databunker-oracle-ssl` on create or `modify-db-instance`), and set `ORACLE_PORT=2484` and `ORACLE_SSL_MODE=require`.
+
+<Warning>
+**Do not leave `SQLNET.CIPHER_SUITE` at the RDS default.** The default (`SSL_RSA_WITH_AES_256_CBC_SHA`) is a legacy RSA-CBC cipher that Go's TLS stack does not offer, so the `go-ora` driver **cannot complete the handshake** and you will see `tls: handshake failure`. Pin a modern ECDHE-GCM suite such as `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`, which both RDS and the driver support.
+</Warning>
+</Step>
+</Steps>
+
+## Verify
+
+Once Databunker Pro is running against Oracle, confirm it is serving:
+
+```sh
+curl -fsS http://localhost:3000/status
+```
+
+For automated first-time setup, see [Unattended installation](/pro/installation/unattended-installation) — the flow is identical; only the `ORACLE_*` variables replace the `PGSQL_*` ones.
+
+## Next steps
+
+- [Generate admin credentials](/pro/installation/generate-admin-credentials) and start the vault.
+- Review capacity and throughput expectations on the [Performance & benchmarks](/pro/get-started/performance) page.
