@@ -6,7 +6,7 @@ description: Run Databunker Pro on Oracle Database — supported editions, conne
 
 Databunker Pro stores its encrypted vault in a SQL database. Alongside PostgreSQL (the default) and MySQL, it supports **Oracle Database**. The Oracle backend is built into the standard image and selected automatically at startup when the **`ORACLE_HOST`** environment variable is set — there is no separate build or plugin.
 
-The driver is the pure-Go [`go-ora`](https://github.com/sijms/go-ora) client, so **no Oracle Instant Client or native libraries are required** in the container.
+The driver is the pure-Go [`go-ora`](https://github.com/sijms/go-ora) client.
 
 ## Choose an edition
 
