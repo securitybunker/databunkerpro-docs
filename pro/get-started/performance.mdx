@@ -1,7 +1,7 @@
 ---
 title: Performance & benchmarks
 sidebarTitle: Performance
-description: Measured Databunker Pro throughput, detokenisation latency, and storage at 10M, 50M, and 100M records on dedicated AWS RDS PostgreSQL — with a sizing guide for choosing database and application instances by record count.
+description: Measured Databunker Pro throughput, detokenisation latency, and storage at 10M, 50M, and 100M records on dedicated AWS RDS PostgreSQL (plus a 10M Oracle comparison) — with a sizing guide for choosing database and application instances by record count.
 ---
 
 This page gives architects the numbers needed to size a Databunker Pro deployment. Every figure below is **measured** — we loaded a 120-field user-profile vault to **10, 50, and 100 million records** against a **dedicated AWS RDS PostgreSQL** database and recorded throughput, latency, storage, and resource utilisation. The methodology is documented so you can reproduce it with your own payloads.
@@ -13,6 +13,7 @@ This page gives architects the numbers needed to size a Databunker Pro deploymen
 - **Detokenisation is fast: ~14 ms** per single-record `UserGet`, regardless of vault size.
 - **Write throughput depends on scale.** At small scale it is limited by the **application tier** and one instance does ~5,800 records/sec. At tens of millions of rows it is limited by **database CPU** and plateaus at **~12,000 records/sec** — so you size the **database** for large vaults, not the app tier.
 - **Rule of thumb:** pick your database and application instances from the [sizing guide](#how-to-size-your-deployment) by record count. For most workloads a single Databunker Pro instance is already more than enough.
+- **Running on Oracle instead?** A comparable 10 M run on RDS Oracle SE2 is included below: similar (slightly faster) read latency, about **40% of PostgreSQL's write ceiling** (`INSERT ALL` overhead), and roughly **3× the on-disk size** (`CLOB` storage). See [Oracle Database backend (10 M)](#oracle-database-backend-10-m).
 
 ## What we measured
 
@@ -123,6 +124,33 @@ The ~0.17 ms per record at 10 M is **amortised inside a 4,000-record bulk reques
 
 - **Backfills / batch flows:** use `UserCreateBulk`.
 - **Real-time API flows:** assume single-digit-millisecond single-record writes; production throughput = `concurrency ÷ per-call latency`.
+
+## Oracle Database backend (10 M)
+
+Databunker Pro also runs on [Oracle Database](/pro/installation/oracle-database). We repeated the 10 M user-record benchmark on **RDS for Oracle** so Oracle shops have a directly comparable number.
+
+**Why a different instance class.** The PostgreSQL runs above use `db.m6i.2xlarge`. In `eu-central-1`, RDS **Oracle Standard Edition 2 does not offer the `m6i` family** — its current-generation `m`-class options are `m5` and `m8i`. We therefore used **`db.m8i.2xlarge`**, the closest current-generation equivalent at the **same 8 vCPU / 32 GB**. So this is PostgreSQL on `m6i.2xlarge` vs Oracle on `m8i.2xlarge` — matched on vCPU, RAM, storage (400 GB gp3 / 12,000 IOPS), and TLS, one CPU generation apart. (We separately confirmed the instance size doesn't move Oracle's result: an identical run on `db.r6i.2xlarge` with **double the RAM, 64 GB**, produced the same throughput — the load is disk-IOPS-bound, not memory-bound.)
+
+| Metric (10 M) | PostgreSQL 16 — `db.m6i.2xlarge` | Oracle SE2 19c — `db.m8i.2xlarge` |
+| --- | --- | --- |
+| Sustained bulk write | ~5,800 rec/s — **app-bound** | **~5,100 rec/s** — **DB-IOPS-bound** |
+| Detok p50 / p95 / p99 | ~14 / 15 / 16 ms | **~6.3 / 7.0 / 7.6 ms** |
+| Total database size | 58.5 GB | **169 GB** |
+| Per-record on disk | ~5.7 KB | **~16.5 KB** |
+| Index size | 1.4 GB (~139 B/rec) | 1.4 GB (~140 B/rec) |
+| RDS CPU during load (avg) | ~20% | ~18% |
+| Transport | TLS | TLS (TCPS :2484) |
+| Write path | `UserCreateBulk` 4,000 × 8 workers | `UserCreateBulk` 1,000 × 16 workers |
+
+**What the numbers say:**
+
+- **Writes reach ~40% of PostgreSQL's ceiling.** Oracle sustained **~5,100 rec/s**. Oracle has no multi-row `INSERT`, so Databunker Pro rewrites each bulk batch as `INSERT ALL`, which is heavier per row and here became **disk-IOPS-bound** — write IOPS ran near the 12,000 provisioned cap while CPU sat at ~18%. Unlike PostgreSQL, which is *app*-bound at 10 M and scales toward ~12,000 rec/s by adding stateless app instances, Oracle was already **database-bound on one instance**; pushing past it needs **more provisioned IOPS**, not more workers (past 16 workers latency rose without throughput).
+- **Reads are faster: ~6 ms** detok p50 vs ~14 ms on PostgreSQL — helped by the newer `m8i` CPU. Detokenisation is a hashed-index point lookup either way.
+- **Storage is ~3× heavier: ~16.5 KB/record** vs ~5.7 KB. Oracle stores the encrypted profile as a `CLOB`, which is far less space-efficient than PostgreSQL's TOAST — budget storage accordingly. **Indexes are the same ~140 B/record**; the index strategy (`token` + retention + `email`) is identical across engines.
+
+<Note>
+This run covers the **Oracle SE2 user-record vault path** only. Format-preserving tokenisation uses a range-partitioned table that requires Oracle **Enterprise Edition**, so it is out of scope on Standard Edition 2 — see [Oracle Database backend](/pro/installation/oracle-database) for setup and edition guidance.
+</Note>
 
 ## Reproduce this benchmark
 
