@@ -65,9 +65,10 @@ info:
   contact:
     name: Databunker Support
     url: https://databunker.org
+  termsOfService: https://databunker.org/legal/terms/
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: Commercial license
+    url: https://databunker.org/legal/terms/
 
 servers:
   - url: http://localhost:3000
