@@ -1,31 +1,119 @@
 ---
-title: Encryption key rotation
+title: Wrapping key rotation
 sidebarTitle: Key rotation
+description: How to rotate the Databunker Pro wrapping key using three Shamir key shares, what to back up before restarting, and what is recoverable if a key is lost.
 ---
 
-Encryption key rotation is a critical process in Databunker Pro to maintain the confidentiality and integrity of sensitive data. The **Wrapping Key**, which encrypts the **Master Key**, is rotated periodically as part of this process to enhance security.
+Rotating the wrapping key replaces the key that protects the [master key](/pro/administration/master-key). The master key itself never changes and is never exposed, so **no stored data is re-encrypted** — rotation takes the same amount of time on a vault of 1,000 records as on one of 100 million.
 
-## What is the Master Key?
+## When to rotate
 
-The **Master Key** is the core encryption key used to protect sensitive data. It is never exposed and is encrypted using a Wrapping Key for additional security.
+- On a schedule — every 90 days or annually is typical, and several frameworks expect a defined interval.
+- When someone who had access to the wrapping key leaves, or the key may have been exposed.
+- As part of a compliance exercise, where you need to evidence that rotation works rather than that it is merely possible.
 
-## What is the Wrapping Key?
+<Tip>
+Rotate on a schedule you have actually rehearsed. The procedure below touches the credential your vault needs in order to boot, so the first time you run it should not be during an incident.
+</Tip>
 
-The Wrapping Key is a cryptographic key used to encrypt the **Master Key** in Databunker Pro. It acts as an additional layer of protection for the Master Key
+## Before you start
 
-## Importance of Key Rotation:
+- **Three of your five [Shamir key shares](/pro/administration/shamir-keys)**, hex-encoded, as issued at setup.
+- The **root access token** of the main tenant. Only the main-tenant administrator can rotate the wrapping key.
+- A **running, healthy instance**. Rotation is performed against a live vault — see [What is recoverable](#what-is-recoverable) if yours is already down.
+- Write access to wherever the wrapping key is configured: your secret manager and your deployment config.
+- A maintenance window. The vault keeps serving traffic during the API call, but it has to be restarted afterwards.
 
-1. **Limiting Key Exposure:** Regular rotation reduces the window of opportunity for potential attackers to compromise the key.
-1. **Compliance:** Many security standards and regulations require periodic key rotation.
-1. **Mitigating Long-term Attacks:** Rotation helps protect against slow, persistent attempts to break encryption.
+## Rotate the key
 
-## Best Practices:
+<Steps>
+<Step title="Call SystemGenerateWrappingKey">
 
-- Rotate the Wrapping Key at regular intervals (e.g., every 90 days or annually).
-- Implement automated reminders for key rotation.
-- Maintain a secure log of key rotations for audit purposes.
-- Test the rotation process regularly to ensure smooth execution when needed.
+Send any three of the five shares. They are hex-encoded, and the API rejects anything else.
 
-## Recovery:
+```bash
+curl -X POST http://localhost:3000/v2/SystemGenerateWrappingKey \
+  -H "X-Bunker-Token: YOUR-ROOT-TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key1": "SHARE-1-HEX",
+    "key2": "SHARE-2-HEX",
+    "key3": "SHARE-3-HEX"
+  }'
+```
 
-In case the current Wrapping Key is lost or compromised, Databunker Pro allows for recovery using [Shamir Key Shares](/pro/administration/shamir-keys). This ensures that the Master Key can be safely re-encrypted with a new Wrapping Key without exposure.
+Databunker Pro reconstructs the recovery key from the shares, uses it to recover the master key, and confirms the result matches the master key the running instance already holds. Only then does it mint a new wrapping key and re-wrap the master key with it.
+
+```json
+{ "status": "ok", "wrappingkey": "NEW-WRAPPING-KEY" }
+```
+
+<Warning>
+The new wrapping key is returned **once, in the response body**, and is not stored anywhere you can read it back. If you lose it before completing the next step, the vault will not restart. Do not run this call in a way that leaves the response in shell history, CI logs, or terminal scrollback.
+</Warning>
+
+</Step>
+<Step title="Store the new key before restarting">
+
+Write `wrappingkey` to **both** places it needs to exist:
+
+- Your secret manager — AWS Secrets Manager, HashiCorp Vault, Google Secret Manager, or equivalent.
+- The deployment configuration the container reads at boot: `DATABUNKER_WRAPPINGKEY`, `DATABUNKER_WRAPPINGKEY_FILE`, or the `-wrappingkey` argument. With Docker Compose this is the `.env` file; on Kubernetes it is the secret mounted into the pod.
+
+Keep the previous value until the restart has succeeded. Updating one location and not the other is the most common way this procedure goes wrong.
+
+</Step>
+<Step title="Restart Databunker Pro">
+
+The running process continues with the key it already holds in memory; the new key only takes effect on restart.
+
+```sh
+docker compose restart databunkerpro
+```
+
+On Kubernetes, roll the deployment after updating the secret.
+
+</Step>
+<Step title="Verify">
+
+Confirm the service is up:
+
+```sh
+curl http://localhost:3000/status
+```
+
+Then read back a known record with `UserGet`. A successful decryption proves the new wrapping key resolves to the same master key. Once verified, discard the old wrapping key.
+
+</Step>
+</Steps>
+
+<Note>
+Your five Shamir shares remain valid after rotation and do **not** need to be reissued or redistributed. They protect a separate recovery wrapping of the master key, which rotation does not modify — see [Two independent wrappings](/pro/administration/master-key#two-independent-wrappings).
+</Note>
+
+## Errors
+
+| Response | Meaning |
+| -------- | ------- |
+| `403 Only the main tenant admin can generate wrapping keys` | The token belongs to a sub-tenant. Use the main-tenant root token. |
+| `500 Failed to hex decode key1` | A share was not valid hex. Send the shares exactly as issued. |
+| `403 Master key mismatch` | The shares reconstructed a valid key, but for a different vault. Check you are using this instance's shares. |
+
+## What is recoverable
+
+| Situation | Outcome |
+| --------- | ------- |
+| Three or more shares, wrapping key intact | Routine rotation. No data at risk. |
+| Wrapping key lost, instance **still running**, three or more shares | Recoverable now. Rotate using the procedure above, store the new key, then restart. Do not restart first. |
+| Wrapping key lost, instance **already stopped**, three or more shares | The vault cannot start without a wrapping key. [Contact support](mailto:office@databunkertech.com) and have your shares available. |
+| Wrapping key lost, **fewer than three shares** | **Unrecoverable.** The encrypted data cannot be decrypted — not by you, and not by Databunker support. There is no vendor backdoor. |
+| Shares lost or reduced below three, wrapping key intact | The vault keeps running normally, but you have lost your recovery margin and can no longer rotate. [Contact support](mailto:office@databunkertech.com) while the wrapping key is still intact — this is fixable, but treat it as an incident rather than a housekeeping task. |
+| Database lost | The wrapping key alone cannot reconstruct data. Restore the database from backup — backups must cover the database **and** the wrapping key. |
+
+<Warning>
+**Three shares is a hard floor.** Below it, a lost wrapping key means permanent loss of every record in the vault. This is a property of the design, not a support limitation: Databunker Pro holds no copy of your keys and no escrow, which is precisely why a breach of our systems cannot expose your data. Audit the location and availability of all five shares on a schedule, and verify you can still reach three of them.
+</Warning>
+
+<Note>
+A wrapping key lost while the vault is still **running** is routine to recover; the same loss discovered after it has **stopped** is not. If you find the key is missing, rotate before anything triggers a restart.
+</Note>

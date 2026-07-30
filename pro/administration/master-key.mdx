@@ -1,23 +1,34 @@
 ---
 title: Master key
+description: How Databunker Pro protects the master key with a wrapping key, why the master key is never exposed, and how the two independent wrappings enable rotation and recovery.
 ---
 
-The Master Key is a critical component of Databunker Pro's security architecture. It serves as the primary encryption key for protecting sensitive data stored within the system.
+The master key encrypts every personal-data record in the vault. It is generated automatically during initial setup and, unlike the open-source edition, is **never exposed** — not to users, not to administrators, and not through any API.
 
-## Key Points:
+Instead of handling the master key directly, you handle a **wrapping key**, which encrypts the master key. That indirection is what makes the rest of the key lifecycle practical:
 
-- The Master Key is automatically generated during the initial setup of Databunker Pro.
-- Unlike the open-source version, the Master Key is never exposed in the Pro Version.
-- The Master Key is encrypted using a Wrapping Key, adding an extra layer of security.
+- **The master key never leaves the vault.** An attacker who obtains the encrypted master key cannot use it without the wrapping key.
+- **Rotation is cheap.** Rotating the wrapping key re-wraps the master key; it does not re-encrypt stored records, so the cost is independent of vault size.
+- **Operational and recovery custody are separate.** The wrapping key lives in your secret manager; recovery is held by [Shamir key shares](/pro/administration/shamir-keys) distributed among trusted parties.
 
-## Enhanced Security in Pro Version:
+## Two independent wrappings
 
-In Databunker Pro, the Master Key's security is significantly strengthened compared to the open-source version:
+Databunker Pro stores the master key **twice**, wrapped by two different keys. This is the single most useful thing to understand about the key model, because it explains what rotation does and does not affect.
 
-1. **No Exposure:** The Master Key is never revealed or accessible to users or administrators, reducing the risk of key compromise.
-1. **Wrapping Key Protection:** The Master Key is encrypted using a Wrapping Key. This means that even if an attacker gains access to the encrypted Master Key, they cannot use it without the Wrapping Key.
-1. **Separation of Concerns:** By using a Wrapping Key to encrypt the Master Key, Databunker Pro implements a separation of concerns. This allows for more flexible key management and enhances overall security.
-1. **Key Rotation Support:** The use of a Wrapping Key facilitates easier and more secure key rotation processes, allowing for regular updates to the encryption without exposing the Master Key.
-1. **Recovery Mechanism:** In case of Wrapping Key loss, the Shamir Key Shares provide a secure way to recover and re-encrypt the Master Key without ever exposing it.
+| Stored as | Wrapped with | Used for |
+| --------- | ------------ | -------- |
+| `encryptedkey` | The **operational wrapping key** — the value in `DATABUNKER_WRAPPINGKEY`, your `.env`, or your Kubernetes secret | Normal startup. Read every time the service boots. |
+| `recoverykey` | The **recovery wrapping key**, reconstructable from any three of the five Shamir shares | Recovery and rotation |
 
-By implementing these additional security measures, Databunker Pro ensures that the Master Key remains secure throughout its lifecycle, significantly reducing the risk of unauthorized access to sensitive data.
+Two consequences follow:
+
+- **Rotation only replaces `encryptedkey`.** Your five Shamir shares stay valid and never need reissuing or redistributing after a rotation, because `recoverykey` is untouched.
+- **The shares remain permanently sensitive.** Rotating the wrapping key does not invalidate previously issued shares — three of them still reconstruct the recovery path. Share custody is a standing obligation, not something rotation resets.
+
+## Recovery
+
+If the wrapping key is lost while the instance is **still running**, you can recover by rotating: three Shamir shares let Databunker Pro mint a new wrapping key and re-wrap the master key, without the master key ever being exposed. See [Wrapping key rotation](/pro/administration/key-rotation).
+
+<Warning>
+This is not a general-purpose disaster-recovery mechanism. The vault cannot start without a wrapping key, and rotation is performed against a live instance. If the wrapping key is lost and the service has already stopped, [contact support](mailto:office@databunkertech.com). If the wrapping key is lost **and** fewer than three shares remain, the data is unrecoverable — Databunker holds no copy of your keys and there is no escrow. See [What is recoverable](/pro/administration/key-rotation#what-is-recoverable).
+</Warning>
