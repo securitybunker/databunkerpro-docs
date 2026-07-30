@@ -1,37 +1,49 @@
 ---
-title: Shamir keys
+title: Shamir key shares
+sidebarTitle: Shamir keys
+description: How Databunker Pro splits the recovery key into five shares under a 3-of-5 threshold, and how to store, distribute, and audit them.
 ---
 
-Shamir Keys, based on Shamir's Secret Sharing scheme, provide a robust and secure method for backing up and recovering critical encryption keys in Databunker Pro.
+At setup, Databunker Pro splits the recovery wrapping key into **five shares** using Shamir's Secret Sharing, under a **3-of-5 threshold**: any three shares reconstruct the key, and any two reveal nothing about it.
 
-## What are Shamir Keys?
+These shares are your recovery path. They are used to [rotate the wrapping key](/pro/administration/key-rotation), and they are what stands between a lost wrapping key and permanent loss of the vault.
 
-Shamir Keys are a set of cryptographic key shares created using Shamir's Secret Sharing algorithm. This method allows a secret (in this case, the Wrapping Key) to be divided into multiple parts.
+## What you receive
 
-## Key Features:
+- **Five shares**, issued once during [initial setup](/pro/installation/generate-admin-credentials) alongside the root access token and the wrapping key.
+- Each share is **hex-encoded**. The rotation API hex-decodes them and rejects anything else, so store them exactly as issued — no re-encoding, no trimming.
+- The shares reconstruct the **recovery** wrapping key, which is separate from the operational wrapping key you keep in your secret manager. See [Two independent wrappings](/pro/administration/master-key#two-independent-wrappings).
 
-1. **Threshold Scheme:** Databunker Pro uses a 3-out-of-5 scheme, meaning any 3 out of the 5 generated key shares can reconstruct the original secret.
-1. **Security:** No single key share contains enough information to reconstruct the secret on its own.
-1. **Flexibility:** Allows for distributed key storage among trusted parties or locations.
+<Warning>
+The five shares are displayed once at setup and cannot be retrieved from the running system afterwards. Capture all five before leaving the setup screen.
+</Warning>
 
-## Use in Databunker Pro:
+## Storing and distributing shares
 
-- During setup, Databunker Pro generates 5 Shamir Key Shares.
-- These shares can be used to recover the Wrapping Key if it's lost or compromised.
-- The recovered Wrapping Key can then be used to safely re-encrypt the Master Key.
+The threshold only buys you something if the shares are genuinely separated. Five shares in one password vault is a 1-of-1 scheme wearing a costume.
 
-## Best Practices for Managing Shamir Keys:
+- **Separate custodians.** Give each share to a different person, or place it in a different system — ideally both. Three should never be reachable by one individual acting alone.
+- **Separate systems.** Avoid putting shares in the same store as the operational wrapping key. An attacker who reaches that store should not also obtain the recovery path.
+- **Document custody, not content.** Record who holds which share and how to reach them. Never record the share values in that document.
+- **Plan for staff turnover.** Reassign a custodian's share when they leave. This is the most common way an organisation quietly drops below three.
 
-1. **Secure Storage:** Store each key share in a different secure location.
-1. **Access Control:** Limit access to key shares to authorized personnel only.
-1. **Regular Audits:** Periodically verify the integrity and availability of all key shares.
-1. **Documentation:** Maintain clear, secure documentation on the location and access procedures for each key share.
-1. **Disaster Recovery Planning:** Include Shamir Key recovery procedures in your disaster recovery plans.
+## Audit them on a schedule
 
-## Recovery Process:
+Because a shortfall is invisible until you need the shares, verify availability rather than assuming it:
 
-1. Gather any 3 of the 5 Shamir Key Shares.
-1. Use Databunker Pro's built-in recovery tool to reconstruct the Wrapping Key.
-1. Generate a new Wrapping Key and use it to start the Databunker Pro process.
+- Confirm each custodian can still produce their share, at least annually.
+- Confirm at least three are reachable within your target recovery time.
+- Rehearse a [wrapping key rotation](/pro/administration/key-rotation) — it exercises the same three-share path as recovery, on a running vault, with no risk to data.
 
-By implementing Shamir Keys, Databunker Pro provides a secure and resilient method for key backup and recovery, ensuring that critical encryption keys can be restored even in worst-case scenarios, without compromising the overall security of the system.
+<Note>
+Rotation does **not** reissue or invalidate shares. The same five remain valid for the life of the deployment, which is why their custody needs periodic review rather than a one-time setup step.
+</Note>
+
+## If you drop below three
+
+| Situation | What to do |
+| --------- | ---------- |
+| Fewer than three shares reachable, wrapping key intact | [Contact support](mailto:office@databunkertech.com) while the wrapping key is still available. This is fixable, but treat it as an incident. |
+| Fewer than three shares reachable, wrapping key lost | Unrecoverable. Databunker holds no copy of your keys and there is no escrow. |
+
+For the full matrix, see [What is recoverable](/pro/administration/key-rotation#what-is-recoverable).
