@@ -6,6 +6,10 @@ description: Apply a new license key to a running Databunker Pro instance.
 
 Databunker Pro stores its license key in the database (the `config` table, under the `licensekey` key). You can replace it at any time on a running instance — there is no need to restart the service or redeploy.
 
+<Note>
+This page covers applying a key. For what a license controls — record caps, what counts as a record, how many licenses a deployment needs, and what happens at the cap or at expiry — see [Licensing and limits](/pro/get-started/licensing).
+</Note>
+
 A new license is typically applied when you:
 
 - Move from **Trial** mode to a paid license.
@@ -22,7 +26,7 @@ To complete this guide, you'll need:
 
 - A running Databunker Pro instance.
 - The **root access token** of the main tenant. See [Generate admin credentials](/pro/installation/generate-admin-credentials).
-- A valid license key. [Book a call](https://cal.com/databunker-team/30min) to obtain or renew one.
+- A valid license key. Request or renew one in the [Databunker Portal](https://portal.databunker.org), then fetch it from there once it is approved.
 
 ## Update via the API
 

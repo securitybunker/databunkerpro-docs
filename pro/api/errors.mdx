@@ -46,8 +46,8 @@ The `message` field is human-readable. Representative messages per status code:
 | ------------------------------------------------- | ---------------------------------------------------------- |
 | `Access denied` | Missing/invalid `X-Bunker-Token`, or the token's policy denies the operation |
 | `API access denied` | Policy evaluation rejected the request |
-| `Record limit reached` | The license record cap was hit — new records cannot be created |
-| `License expired` | The installation license has expired |
+| `Record limit reached` | The [license record cap](/pro/get-started/licensing#when-the-record-cap-is-reached) was hit — new records cannot be created, while reads, updates and deletes keep working |
+| `License expired` | The installation license has expired and the vault is [read-only](/pro/get-started/licensing#when-the-license-expires) — reads, exports and deletions still work |
 | `BulkListUsers is disabled` | The `list_users` configuration flag is off |
 | `The unlockuuid value was not found or is not valid` | The [bulk-unlock UUID](/pro/api/authentication#bulk-unlock-uuid) is missing, wrong, or past its 60-second lifetime |
 | `Only the main tenant admin can ...` | A main-tenant-only endpoint was called with a sub-tenant token |

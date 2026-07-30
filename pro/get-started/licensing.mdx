@@ -1,0 +1,143 @@
+---
+title: Licensing and limits
+sidebarTitle: Licensing & limits
+description: What a Databunker Pro license controls, what counts as a record, how many licenses a deployment needs, and how the vault behaves when the record cap or the expiry date is reached.
+---
+
+A Databunker Pro license controls two things: **how many records the vault can hold** and **when the license expires**. It does not gate features. Every capability — fuzzy search, format-preserving tokenization, multi-tenancy, file vault, record versioning, Shamir key shares — is available in every mode, including Trial.
+
+## What counts as a record
+
+**One user profile is one record**, and everything attached to that profile is included in it:
+
+- Consents and legal basis
+- Application data
+- Sessions
+- The complete [version history](/pro/concepts/record-versioning)
+
+Enabling record versioning does not multiply your record count.
+
+A value tokenized through the [format-preserving tokenization](/pro/concepts/tokenization) API — a credit card, for example — also counts as one record. But a card stored **inside** a user profile is not metered separately: profile plus card is a single record.
+
+User profiles and format-preserving tokens draw on one shared pool. In practice, your record count is your user count.
+
+## How many licenses you need
+
+A license is scoped to **one deployment — that is, one database**. The key is stored in the vault's own database, so every Databunker Pro instance pointed at that database shares one license.
+
+| Situation | Licenses needed |
+| --- | --- |
+| One instance | 1 |
+| Horizontal scaling / high availability — several stateless instances, one database | **1** |
+| Dev, QA, staging | One key per environment, requested in the portal — **three-month** term |
+| [Multi-jurisdiction deployment](/pro/concepts/global-deployment) — one vault per region | 1 per region, since each has its own database |
+
+<Note>
+The [sizing guide](/pro/get-started/performance#how-to-size-your-deployment) recommends running several stateless instances against a single database for large vaults. That is covered by a single license — you are not licensed per container.
+</Note>
+
+### Non-production environments
+
+Development, QA, and staging deployments do not have to share your production license. Request a separate key for each in the [Databunker Portal](https://portal.databunker.org) — no sales call needed. Each is issued with a **three-month term**, and you can request a new one from the portal when it needs renewing.
+
+This keeps test data out of your production record count, and means staging never has to point at the production vault.
+
+<Warning>
+A non-production key expires like any other. When it does, that environment degrades to [read-only](#when-the-license-expires) and writes return `License expired` — which will surface as failing integration tests or a broken staging sign-in rather than an obvious licensing error. Track the expiry date and renew before it lapses.
+</Warning>
+
+## Modes and caps
+
+<Tabs>
+<Tab title="No license key">
+
+Leaving the license key empty at setup runs Databunker Pro in **Trial mode**: up to **1,000 records**, valid for **14 days** from the moment the vault is initialised.
+
+<Warning>
+Trial mode expires 14 days after setup. When it does, the vault degrades to read-only and write calls return `License expired`. For anything longer than a two-week evaluation, get a trial key instead.
+</Warning>
+
+</Tab>
+<Tab title="Trial license key">
+
+Create a free account at [portal.databunker.org/trial](https://portal.databunker.org/trial) to generate a trial key covering up to **1 million records**. This is the right choice for any evaluation involving realistic data volumes.
+
+</Tab>
+<Tab title="Paid license key">
+
+A paid key carries its own record limit and expiry date, set to match your plan.
+
+Request a production license from the [Databunker Portal](https://portal.databunker.org). We will get in touch to agree the scope, and once it is approved the key becomes available to fetch from the portal — the same place you generate your non-production keys.
+
+See [Databunker plans](https://databunker.org/plans/) for the available tiers.
+
+</Tab>
+</Tabs>
+
+Apply or replace a key on a running instance at any time — see [Update the license key](/pro/howtos/update-license). No restart is required.
+
+## When the record cap is reached
+
+Four API calls create new records and are refused with `403 Record limit reached`:
+
+- `UserCreate` and `UserCreateBulk`
+- `TokenCreate` and `TokenCreateBulk`
+
+Everything else keeps working. Reading, updating, patching, and deleting records are unaffected, so an application at its cap continues to serve users normally — it just cannot add new ones.
+
+<Note>
+The limit is checked once before a write begins, not per record. A bulk request that starts below the cap completes in full and can finish slightly above it. Treat the cap as the point at which new records stop being accepted, rather than an exact ceiling.
+</Note>
+
+## When the license expires
+
+There is no grace period. Once the expiry date passes, the vault degrades to **read-only**: calls that store or modify data return `403 License expired`, while reads, exports, and deletions keep working.
+
+This is deliberate. Your data is never held hostage by a lapsed license — you can always retrieve every record, and you can still honour erasure requests.
+
+**Calls refused while expired**
+
+| Area | Calls |
+| --- | --- |
+| User records | `UserCreate` · `UserCreateBulk` · `UserUpdate` · `UserPatch` · `UserUpdateRequest` · `UserPatchRequest` |
+| Application data | `AppdataCreate` · `AppdataUpdate` · `AppdataUpdateRequest` |
+| Files | `FileCreate` |
+| Format-preserving tokens | `TokenCreate` · `TokenCreateBulk` |
+| Sessions | `SessionUpsert` |
+| Agreements | `AgreementAccept` · `AgreementCancel` · `AgreementRevokeAll` |
+| Shared records | `SharedRecordCreate` |
+| Tenants | `TenantCreate` · `TenantUpdate` |
+
+Reads, searches, reports, audit access, bulk export, and all delete operations — including right-to-be-forgotten erasure — continue to work.
+
+<Warning>
+If your application uses Databunker Pro for [session storage](/pro/api/overview), note that `SessionUpsert` is on the refused list: an expired license stops new sessions from being written, which prevents users from signing in. Treat license renewal as a production dependency, not a billing formality.
+</Warning>
+
+## Checking your usage
+
+`SystemGetSystemStats` reports current usage against your license, so you can alert on it before hitting the cap:
+
+```bash
+curl -X POST http://localhost:3000/v2/SystemGetSystemStats \
+  -H "X-Bunker-Token: YOUR-ROOT-TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+The response includes three license fields:
+
+| Field | Meaning |
+| --- | --- |
+| `totalnumrecords` | Records currently stored — user profiles plus format-preserving tokens |
+| `licensemaxrecords` | The record cap from your license |
+| `licensefinalexpiration` | License expiry as a Unix timestamp |
+
+<Tip>
+Alert on `totalnumrecords / licensemaxrecords` crossing 80%, and on `licensefinalexpiration` coming within 30 days. Both failures are silent until a write is refused.
+</Tip>
+
+## Next steps
+
+- [Update the license key](/pro/howtos/update-license) — apply a new or renewed key to a running instance
+- [Performance and sizing](/pro/get-started/performance) — choose database and instance sizes for your record count
+- [Errors reference](/pro/api/errors) — the full list of API error messages
