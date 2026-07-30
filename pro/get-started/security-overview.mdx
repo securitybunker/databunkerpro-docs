@@ -31,59 +31,20 @@ Databunker Pro extracts emails, phone numbers, and login names from user records
 
 ### Database-level tenant isolation
 
-On PostgreSQL, tenant isolation is enforced by the database itself rather than by the correctness of application queries. Databunker Pro creates two dedicated roles during setup. Both are `NOSUPERUSER NOLOGIN`: neither can log into the database directly, and both are reachable only through `SET ROLE` inside Databunker Pro's own session.
+On PostgreSQL, tenant isolation is enforced by the database rather than by the correctness of application queries. Two dedicated roles are created at setup, both `NOSUPERUSER NOLOGIN` so neither can be used to log into the database directly:
 
 | Role | Privileges | Used for |
 | ---- | ---------- | -------- |
-| `mtenant` | No `BYPASSRLS` — subject to row-level security on every tenant-scoped table | All ordinary traffic |
-| `madmin` | `BYPASSRLS`, granted `SELECT` on the `users` table only | Deliberate cross-tenant reads |
+| `mtenant` | No `BYPASSRLS` — bound by row-level security on every tenant-scoped table | All ordinary traffic |
+| `madmin` | `BYPASSRLS`, granted `SELECT` on the `users` table only | The few deliberate cross-tenant reads |
 
-#### mtenant — the default path
+Ordinary requests run as `mtenant` with the tenant fixed for the session, so a query that omits or mistakes its tenant condition still cannot return another tenant's rows — isolation does not depend on every query being written correctly. Roughly two dozen tables are covered.
 
-Every tenant-scoped table has row-level security enabled and a policy tying each row to the current tenant:
+Cross-tenant reads are the narrow exception. They are restricted to the main-tenant administrator, additionally gated by a short-lived unlock UUID, and audited on every call. Because `madmin` is granted read-only access to a single table, even that bypass path cannot write anything or reach audit records, sessions, or files.
 
-```sql
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY users_policy ON users FOR ALL TO mtenant
-  USING (current_setting('my.tenantid')::int = tenantid);
-```
+On MySQL and Oracle, tenant scoping is applied in the queries Databunker Pro issues rather than by the database, so this second line of defence is specific to PostgreSQL.
 
-Each request selects the role and the tenant before touching any data:
-
-```sql
-SET ROLE mtenant; SET my.tenantid=42;
-```
-
-From that point the database filters rows itself, so a query that forgets its tenant condition — or gets it wrong — still cannot return another tenant's records. This is defence in depth: isolation does not depend on every query being written correctly. Around two dozen tables are covered, including `users`, `userapps`, `audit`, `sessions`, `agreements`, `files`, `tokens`, and the versioning tables.
-
-The connection default is `mtenant` with `my.tenantid=1`, so the restricted role is what a session gets unless something explicitly changes it.
-
-<Note>
-The `xtokens` table is intentionally **not** under RLS. An incoming API token has to be resolved to a tenant before the tenant is known, so that lookup cannot itself be tenant-scoped. Tokens carry their tenant binding, which is applied to every subsequent query in the request.
-</Note>
-
-#### madmin — the cross-tenant exception
-
-A few operations legitimately need to see one person's records across every tenant: locating an individual who exists in more than one tenant, and producing a complete personal-data report for a data subject. These run under `madmin`, which bypasses RLS.
-
-Two grants keep that bypass narrow. `madmin` holds **`SELECT` only**, and **only on the `users` table** — so even on the bypass path it cannot write anything, and cannot read audit records, sessions, files, or any other table.
-
-| Endpoint | Access required |
-| -------- | --------------- |
-| [`SystemGetUserProfiles`](/pro/api/system-operations/get-user-profiles-across-all-tenants) | Main-tenant admin |
-| `SystemSearchUserProfiles` | Main-tenant admin |
-| `SystemDeleteUserProfiles` | Main-tenant admin |
-| `SystemGetUserReport` · `SystemGetUserHTMLReport` | A data subject's own token, for their own report |
-
-The first three are restricted to the **main tenant administrator**; a tenant-scoped token calling them is refused with `403 Only the main tenant admin can ...`. Every call on this path is written to the [audit trail](#encryption-of-audit-events) like any other, so cross-tenant access is recorded rather than silent.
-
-<Warning>
-`madmin` is the one role that can see across tenant boundaries. Treat the main-tenant root token as your most sensitive credential and issue [scoped role tokens](/pro/api/authentication) for everything else — a tenant-scoped token cannot reach these endpoints, which is the point.
-</Warning>
-
-#### MySQL and Oracle
-
-Multi-tenancy is supported on MySQL and Oracle, but neither uses a database-enforced equivalent of RLS: there, tenant scoping is applied in the queries Databunker Pro issues. The isolation model is the same from the API's point of view, without the second, database-level line of defence that PostgreSQL provides.
+For the policy definitions, the covered tables, and the cross-tenant endpoints, see [Database-level tenant isolation](/pro/administration/multi-tenancy#database-level-tenant-isolation).
 
 ### FIPS compliance
 
@@ -110,7 +71,11 @@ We have introduced a specialized secure API to control and limit bulk data expor
 
 ### Wrapping keys and Shamir key shares
 
-Databunker Pro uses a **Master key** to encrypt all records. The Master Key is never exposed. In Databunker Pro, the master key is further secured using a **Wrapping key**. The wrapping key can be rotated via API, and its backup is divided into parts using the Shamir key sharing algorithm for recovery if lost or compromised.
+Databunker Pro uses a **master key** to encrypt all records. The master key is never exposed — not to users, not to administrators, and not through any API. It is itself encrypted by a **wrapping key**, which is the only key you handle.
+
+The master key is stored under two independent wrappings: one by the operational wrapping key your deployment reads at boot, and one by a recovery key reconstructable from any three of five **Shamir key shares** issued at setup. Rotating the wrapping key re-wraps the master key without re-encrypting any stored record, so rotation costs the same on a vault of 1,000 records as on one of 100 million, and previously issued shares stay valid.
+
+Databunker holds **no copy of your keys and operates no escrow**. This is why a compromise of Databunker's own systems cannot expose your data — and equally why key custody is your responsibility: if the wrapping key is lost and fewer than three shares remain, the data cannot be decrypted by anyone. See [Wrapping key rotation](/pro/administration/key-rotation) for the procedure and [What is recoverable](/pro/administration/key-rotation#what-is-recoverable) for the full failure matrix.
 
 ### Optional user scheme validation
 
@@ -143,3 +108,13 @@ Databunker Pro is a stateless application server, enabling multiple instances to
 ### Scalability in Kubernetes
 
 Databunker Pro can be seamlessly scaled in Kubernetes using horizontal scaling. This ensures high availability and performance under increasing workloads. Kubernetes facilitates effortless scaling by dynamically adjusting the number of running instances based on resource utilization, ensuring that Databunker can meet growing demands efficiently.
+
+### Encryption service availability
+
+The sections above cover capacity. Availability of the encryption service itself depends on one credential: the vault **cannot start without its wrapping key**. Key custody is therefore an availability control, not only a confidentiality one. Treat the wrapping key with the same operational care as the database itself:
+
+- Back up the database **and** the wrapping key. Either one alone is insufficient to restore service.
+- Store the wrapping key in a secret manager, and keep the five Shamir shares somewhere separate from it.
+- Verify at least three shares remain reachable on a schedule — a shortfall is invisible until the moment you need them.
+
+A wrapping key lost while the service is still running is routinely recoverable; the same loss discovered after it has stopped is not. See [What is recoverable](/pro/administration/key-rotation#what-is-recoverable).
