@@ -112,7 +112,7 @@ root-token compromise). **Still the highest-value remaining gap:** the users-tab
 
 | # | Question | Today | Where it stands |
 | --- | --- | --- | --- |
-| 1 | What is this, do I need it? | ⚠️ | Positioning exists but is marketing-voiced; no hub, no Pro-vs-OSS decision page. |
+| 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off `pii-vault.mdx` and `architecture.mdx`, and performance promoted to position 2. Still missing: a hub page and a Pro-vs-OSS decision page. |
 | 2 | Can my team integrate it in one sprint? | ❌ | No Pro quickstart, no framework guides, SDK page is 4 links to GitHub (32 lines, no install command, no example). |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ❌ | No production checklist, no HA/scaling guide, no monitoring, no upgrade path. |
@@ -192,7 +192,7 @@ can call the API.* Say it, then show the mitigations already shipped — masking
 `select-security` bulk-export limits, rate limiting, audit trail, per-tenant isolation. Vendors who
 state their limits get believed about their strengths.
 
-#### ~~P1.3 `pro/evaluate/licensing-and-limits.mdx`~~ — done
+#### ✅ P1.3 `pro/evaluate/licensing-and-limits.mdx`
 
 Shipped as [`pro/get-started/licensing.mdx`](pro/get-started/licensing.mdx), placed in *Get started*
 rather than a new *Evaluate* group so it is reachable before that restructure happens.
@@ -297,10 +297,10 @@ because the plumbing already exists.
 ### Quick wins (under an hour each)
 
 1. Add `index.mdx` hub with a card grid.
-2. Move `performance` to position 2 under *Get started*.
-3. Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers from `pii-vault.mdx` and `architecture.mdx`.
-4. Remove emoji from all headings.
-5. Add a non-localhost entry to `openapi.yml` `servers:`.
+2. ✅ Move `performance` to position 2 under *Get started*.
+3. ✅ Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers from `pii-vault.mdx` and `architecture.mdx`.
+4. ⚠️ Remove emoji from all headings — all 9 removed; `access-control.mdx` still has `## Why Choose CRBAC?`, and body ✅/❌ markers were kept.
+5. ✅ Add a non-localhost entry to `openapi.yml` `servers:`.
 6. Add `⏱`/prerequisites callouts to the four install pages.
 7. Wrap the FAQ in `<Accordion>`.
 8. Fix the hardcoded white background on the architecture diagram.
