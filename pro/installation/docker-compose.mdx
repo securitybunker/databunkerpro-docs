@@ -46,6 +46,15 @@ cd docker-compose-mysql
 ```
 
 </Tab>
+<Tab title="Oracle">
+
+```sh
+cd docker-compose-oracle
+```
+
+This stack runs Oracle Database 23ai Free using the [`gvenzl/oracle-free`](https://github.com/gvenzl/oci-oracle-free) image. See [Oracle Database backend](/pro/installation/oracle-database) for the connection variables and for pointing Databunker Pro at a managed Oracle instance instead.
+
+</Tab>
 </Tabs>
 
 </Step>
@@ -70,6 +79,23 @@ docker compose up -d
 ```
 
 </Step>
+<Step title="Copy the access code from the logs">
+
+On first start Databunker Pro switches to installation mode and prints a one-time six-digit access code. Follow the Databunker Pro container logs to read it:
+
+```sh
+./logs.sh
+```
+
+```
+2026/07/30 06:32:08 Databunker tables are missing - switching to installation mode
+2026/07/30 06:32:08 Open HTTP listener 0.0.0.0:3000
+2026/07/30 06:32:08 Access code: 392629
+```
+
+Copy the access code, then press `Ctrl-C` to leave the log view. This only stops following the logs — the container keeps running.
+
+</Step>
 <Step title="Access the web interface">
 In your browser, open [localhost:3000](http://localhost:3000) to access the Databunker web interface.
 </Step>
@@ -77,6 +103,16 @@ In your browser, open [localhost:3000](http://localhost:3000) to access the Data
 For detailed instructions, see [Generate admin credentials](/pro/installation/generate-admin-credentials).
 </Step>
 </Steps>
+
+## Oracle-specific notes
+
+If you chose the Oracle stack, a few things differ from PostgreSQL and MySQL:
+
+- **First boot takes a few minutes** while Oracle initializes — longer on Apple Silicon, where the image runs emulated. Follow the progress with `./logs.sh` and wait for the access code before opening the web interface.
+- **There is no separate database to create.** The image auto-creates the schema user from `APP_USER` / `APP_USER_PASSWORD` inside the `FREEPDB1` pluggable database, and in Oracle the schema *is* the namespace (`ORACLE_SERVICE=FREEPDB1`).
+- **Passwords are short by design.** Oracle limits passwords to 30 bytes and parses them as identifiers, so `generate-env-files.sh` produces a short, letter-initial, alphanumeric password.
+- **TLS is opt-in** and requires an Oracle wallet. Run `./generate-env-files.sh ssl` and see `docker-compose-oracle/README.md` for the two-step setup.
+- `./oracle.sh` opens a `sqlplus` session as the schema user.
 
 <Note>
 
