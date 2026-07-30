@@ -29,6 +29,62 @@ Databunker Pro extracts emails, phone numbers, and login names from user records
 
 **Databunker Pro** supports **PostgreSQL**, **MySQL**, and **Oracle** as backend databases, connecting through a **secure SSL channel**. Multi-tenancy is supported on all three; on PostgreSQL it is enforced with native row-level security (RLS).
 
+### Database-level tenant isolation
+
+On PostgreSQL, tenant isolation is enforced by the database itself rather than by the correctness of application queries. Databunker Pro creates two dedicated roles during setup. Both are `NOSUPERUSER NOLOGIN`: neither can log into the database directly, and both are reachable only through `SET ROLE` inside Databunker Pro's own session.
+
+| Role | Privileges | Used for |
+| ---- | ---------- | -------- |
+| `mtenant` | No `BYPASSRLS` — subject to row-level security on every tenant-scoped table | All ordinary traffic |
+| `madmin` | `BYPASSRLS`, granted `SELECT` on the `users` table only | Deliberate cross-tenant reads |
+
+#### mtenant — the default path
+
+Every tenant-scoped table has row-level security enabled and a policy tying each row to the current tenant:
+
+```sql
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY users_policy ON users FOR ALL TO mtenant
+  USING (current_setting('my.tenantid')::int = tenantid);
+```
+
+Each request selects the role and the tenant before touching any data:
+
+```sql
+SET ROLE mtenant; SET my.tenantid=42;
+```
+
+From that point the database filters rows itself, so a query that forgets its tenant condition — or gets it wrong — still cannot return another tenant's records. This is defence in depth: isolation does not depend on every query being written correctly. Around two dozen tables are covered, including `users`, `userapps`, `audit`, `sessions`, `agreements`, `files`, `tokens`, and the versioning tables.
+
+The connection default is `mtenant` with `my.tenantid=1`, so the restricted role is what a session gets unless something explicitly changes it.
+
+<Note>
+The `xtokens` table is intentionally **not** under RLS. An incoming API token has to be resolved to a tenant before the tenant is known, so that lookup cannot itself be tenant-scoped. Tokens carry their tenant binding, which is applied to every subsequent query in the request.
+</Note>
+
+#### madmin — the cross-tenant exception
+
+A few operations legitimately need to see one person's records across every tenant: locating an individual who exists in more than one tenant, and producing a complete personal-data report for a data subject. These run under `madmin`, which bypasses RLS.
+
+Two grants keep that bypass narrow. `madmin` holds **`SELECT` only**, and **only on the `users` table** — so even on the bypass path it cannot write anything, and cannot read audit records, sessions, files, or any other table.
+
+| Endpoint | Access required |
+| -------- | --------------- |
+| [`SystemGetUserProfiles`](/pro/api/system-operations/get-user-profiles-across-all-tenants) | Main-tenant admin |
+| `SystemSearchUserProfiles` | Main-tenant admin |
+| `SystemDeleteUserProfiles` | Main-tenant admin |
+| `SystemGetUserReport` · `SystemGetUserHTMLReport` | A data subject's own token, for their own report |
+
+The first three are restricted to the **main tenant administrator**; a tenant-scoped token calling them is refused with `403 Only the main tenant admin can ...`. Every call on this path is written to the [audit trail](#encryption-of-audit-events) like any other, so cross-tenant access is recorded rather than silent.
+
+<Warning>
+`madmin` is the one role that can see across tenant boundaries. Treat the main-tenant root token as your most sensitive credential and issue [scoped role tokens](/pro/api/authentication) for everything else — a tenant-scoped token cannot reach these endpoints, which is the point.
+</Warning>
+
+#### MySQL and Oracle
+
+Multi-tenancy is supported on MySQL and Oracle, but neither uses a database-enforced equivalent of RLS: there, tenant scoping is applied in the queries Databunker Pro issues. The isolation model is the same from the API's point of view, without the second, database-level line of defence that PostgreSQL provides.
+
 ### FIPS compliance
 
 Databunker Pro uses **FIPS 140-2 compliant** cryptographic algorithms for core security operations:
@@ -68,7 +124,7 @@ Databunker employs encrypted JSON objects for storing user profiles. During upda
 
 ### Multi-tenancy
 
-Databunker Pro implements [multi-tenancy](/pro/administration/multi-tenancy) on PostgreSQL, MySQL, and Oracle. Queries executed by specific tenants are restricted to their own records. On PostgreSQL, isolation is enforced with the database's native row-level security (RLS) mechanism.
+Databunker Pro implements [multi-tenancy](/pro/administration/multi-tenancy) on PostgreSQL, MySQL, and Oracle. Queries executed by specific tenants are restricted to their own records. On PostgreSQL, isolation is enforced with the database's native row-level security (RLS) mechanism — see [Database-level tenant isolation](#database-level-tenant-isolation) for the role model and the cross-tenant exceptions.
 
 ### Token-based API Access
 
