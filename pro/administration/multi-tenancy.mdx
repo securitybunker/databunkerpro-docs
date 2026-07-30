@@ -4,7 +4,7 @@ title: Multi-tenancy
 
 Databunker Pro supports multi-tenancy, allowing you to manage multiple tenants within a single instance. This document outlines the API endpoints for creating, managing, and interacting with tenants.
 
-**Note:** Multi-tenancy is supported on PostgreSQL, MySQL, and Oracle. On PostgreSQL it is enforced with native row-level security (RLS), using a restricted `mtenant` role for all ordinary traffic and a narrowly-granted `madmin` role for the few deliberate cross-tenant operations — see [Database-level tenant isolation](/pro/get-started/security-overview#database-level-tenant-isolation).
+**Note:** Multi-tenancy is supported on PostgreSQL, MySQL, and Oracle. On PostgreSQL it is enforced with native row-level security (RLS) — see [Database-level tenant isolation](#database-level-tenant-isolation).
 
 <Tip>
 **Multi-tenancy is per-instance.** All tenants live inside the same Databunker Pro deployment and share the same physical region. If you need to keep PII inside different *legal jurisdictions* — for example because of GDPR cross-border rules, India's DPDPA, Russia's 152-FZ, or similar — multi-tenancy is not the right tool. Instead, run one Databunker Pro instance per jurisdiction and unify operations via Databunker DPO. See [Multi-jurisdiction deployment](/pro/concepts/global-deployment).
@@ -124,6 +124,47 @@ For a full list of API requests, check out the [API Reference](/pro/api/overview
 4. **SSL/TLS**: Always use HTTPS for secure communication with the API endpoints.
 
 For more detailed information on request/response formats, additional endpoints, or error handling, please refer to the complete Databunker Pro API documentation.
+
+## Database-level tenant isolation
+
+On PostgreSQL, tenant isolation is enforced by the database itself rather than by the correctness of the queries Databunker Pro issues. Two dedicated roles are created during setup, both `NOSUPERUSER NOLOGIN` — neither can log into the database directly, and both are reachable only through `SET ROLE` inside Databunker Pro's own session.
+
+| Role | Privileges | Used for |
+| ---- | ---------- | -------- |
+| `mtenant` | No `BYPASSRLS` — bound by row-level security on every tenant-scoped table | All ordinary traffic |
+| `madmin` | `BYPASSRLS`, granted `SELECT` on the `users` table only | The cross-tenant System Operations below |
+
+### How mtenant scoping works
+
+Every tenant-scoped table has row-level security enabled, with a policy tying each row to the tenant set on the current session:
+
+```sql
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY users_policy ON users FOR ALL TO mtenant
+  USING (current_setting('my.tenantid')::int = tenantid);
+```
+
+Each request selects the role and the tenant before touching any data:
+
+```sql
+SET ROLE mtenant; SET my.tenantid=42;
+```
+
+From that point the database filters rows itself, so a query that omits its tenant condition — or gets it wrong — still cannot return another tenant's records. This is defence in depth: isolation does not depend on every query being written correctly. Roughly two dozen tables are covered, including `users`, `userapps`, `audit`, `sessions`, `agreements`, `files`, `tokens`, and the versioning tables.
+
+The connection default is `mtenant` with `my.tenantid=1`, so a session gets the restricted role unless something explicitly changes it.
+
+<Note>
+The `xtokens` table is intentionally **not** under RLS. An incoming API token must be resolved to a tenant before the tenant is known, so that lookup cannot itself be tenant-scoped. Tokens carry their tenant binding, which is then applied to every subsequent query in the request.
+</Note>
+
+### How madmin is constrained
+
+The cross-tenant System Operations below necessarily bypass RLS, so two grants keep that bypass narrow: `madmin` holds **`SELECT` only**, and **only on the `users` table**. Even on the bypass path it cannot write anything, and cannot read audit records, sessions, files, or any other table.
+
+### MySQL and Oracle
+
+Multi-tenancy is supported on both, but neither uses a database-enforced equivalent of RLS: there, tenant scoping is applied in the queries Databunker Pro issues. The isolation model is identical from the API's point of view, without this second, database-level line of defence.
 
 ## Cross-tenant System Operations
 

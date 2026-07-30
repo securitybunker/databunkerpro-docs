@@ -60,6 +60,28 @@ The primary buying audience for Databunker Pro is the CTO or engineering lead wh
 running a PII vault in production. This section benchmarks the site against 13 developer-tool
 documentation sites (examined July 2026) and lists the prioritised gaps.
 
+### Done so far
+
+| Change | Closes |
+| ------ | ------ |
+| **[Licensing and limits](pro/get-started/licensing.mdx)** — new page: what the licence controls (record count and expiry, never features), what counts as a record, licence scope per deployment, behaviour at the cap and at expiry, checking usage via `SystemGetSystemStats` | Question 6 |
+| **[Wrapping key rotation](pro/administration/key-rotation.mdx)** — rewritten as a runbook: prerequisites, the `SystemGenerateWrappingKey` call, storing the returned key before restarting, verification, and a *What is recoverable* failure matrix | Half of question 5 |
+| **[Master key](pro/administration/master-key.mdx)** — documents the two independent wrappings (`encryptedkey` / `recoverykey`), which is what makes rotation O(1) in vault size and keeps Shamir shares valid across rotations | Half of question 5 |
+| **[Shamir keys](pro/administration/shamir-keys.mdx)** — rewritten around share custody: hex format, distribution across custodians *and* systems, audit cadence, and what happens below the three-share threshold | Half of question 5 |
+| **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
+| **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
+| Supporting fixes — the 14-day trial window (previously undocumented, a silent day-15 failure), all licence-key paths routed through the portal, `record-versioning` note that versions do not multiply record count, `errors.mdx` cross-links, and the Pro `openapi.yml` licence corrected from MIT to commercial terms | — |
+
+**Corrections that came out of this work.** Writing the licensing page surfaced two code
+deltas in `LicenseGetLimitations` (`databunkerpro/src/license_api.go`): the trial cap returned
+10,000 records instead of 1,000, and the trial period was 30 days instead of 14. Both are fixed on
+the `fix-trial-license-limits` branch. Documenting a mechanism against its source tends to find
+these; it is worth doing deliberately.
+
+**Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
+root-token compromise). **Still the highest-value remaining gap:** the users-table migration guide
+(P0.3), followed by the Pro quickstart (P0.2) and the production checklist (P0.4).
+
 ### Sites benchmarked
 
 | Tool | Category | The pattern worth stealing |
@@ -94,8 +116,8 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | 2 | Can my team integrate it in one sprint? | ❌ | No Pro quickstart, no framework guides, SDK page is 4 links to GitHub (32 lines, no install command, no example). |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ❌ | No production checklist, no HA/scaling guide, no monitoring, no upgrade path. |
-| 5 | What breaks, and how badly? | ❌ | No threat model, no failure modes, no "what happens if we lose the wrapping key". |
-| 6 | What does it cost; what does the licence gate? | ❌ | The API returns 403 on "license limit" and there's a `howtos/update-license` page, but nothing states what the licence actually limits. |
+| 5 | What breaks, and how badly? | ⚠️ | Key-loss failure modes and the recovery matrix are now documented (see [Done so far](#done-so-far)). Still missing: a threat model, and the other failure modes — database loss, root-token compromise. |
+| 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
 | 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
 | 8 | Migration path in (and out)? | ❌ | Nothing. This is the #1 blocking question for anyone with an existing `users` table. |
 | 9 | Is the project alive? | ❌ | No changelog, no releases, no version support policy. |
@@ -170,11 +192,10 @@ can call the API.* Say it, then show the mitigations already shipped — masking
 `select-security` bulk-export limits, rate limiting, audit trail, per-tenant isolation. Vendors who
 state their limits get believed about their strengths.
 
-#### P1.3 `pro/evaluate/licensing-and-limits.mdx`
+#### ~~P1.3 `pro/evaluate/licensing-and-limits.mdx`~~ — done
 
-What the licence key gates (records? tenants? features?), what triggers a `403 license limit`, how the
-trial key works, and what happens at expiry — does the vault go read-only, or refuse writes? A CTO
-cannot put this in a plan without knowing.
+Shipped as [`pro/get-started/licensing.mdx`](pro/get-started/licensing.mdx), placed in *Get started*
+rather than a new *Evaluate* group so it is reachable before that restructure happens.
 
 #### P1.4 Rewrite `developer-tools/overview.mdx` into a real SDK page
 
