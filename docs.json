@@ -20,10 +20,10 @@
                 "group": "Get started",
                 "pages": [
                   "pro/get-started/overview",
+                  "pro/get-started/performance",
                   "pro/get-started/pii-vault",
                   "pro/get-started/architecture",
                   "pro/get-started/security-overview",
-                  "pro/get-started/performance",
                   "pro/get-started/licensing",
                   "pro/get-started/faq"
                 ]

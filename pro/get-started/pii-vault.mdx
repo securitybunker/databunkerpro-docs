@@ -3,13 +3,13 @@ title: PII Vault - PII Storage & Tokenization in Databunker Pro
 sidebarTitle: PII Data Vault
 ---
 
-In today's data-driven world, protecting personally identifiable information (PII) isn't just a compliance requirement—it's a business imperative. Databunker Pro's PII Vault provides enterprise-grade secure storage and tokenization for sensitive personal data, enabling organizations to build privacy-by-design solutions while maintaining operational efficiency.
+The PII Vault stores and tokenizes personal data (PII, PHI, KYC, PCI) so it never sits in your application database.
 
 When sensitive data enters your system, Databunker instantly encrypts, tokenizes, and stores it in a secure vault. You get back a safe token to store anywhere — even in public databases.
 
 You can run Databunker in the cloud or on-premises, you can enable your enterprise customers to self-host their PII vault in any region, which solves PII export restrictions and reduces compliance risk.
 
-## 🔐 What is a PII Vault?
+## What is a PII Vault?
 
 The PII Vault is Databunker Pro's core feature that transforms how organizations handle sensitive personal data. Instead of storing PII directly in your application database, the PII Vault:
 
@@ -19,7 +19,7 @@ The PII Vault is Databunker Pro's core feature that transforms how organizations
 - **Provides audit trails** for every data access and modification
 - **Enables compliance** with GDPR, HIPAA, SOC2, and other privacy regulations
 
-## ⚠️ Why Use PII Vault Instead of Regular Database Tables?
+## Why Use PII Vault Instead of Regular Database Tables?
 
 ### Traditional Database Approach Problems
 
@@ -64,7 +64,7 @@ CREATE TABLE users (
 - ✅ **Simplified architecture** - no complex encryption management
 - ✅ **Audit-ready** with comprehensive access logging
 
-## ⚙️ How PII Vault Works
+## How PII Vault Works
 
 ### 1. Data Ingestion and Tokenization
 
@@ -91,7 +91,7 @@ Together, these properties mean that **tokens within a tenant are stable, determ
 
 ![Databunker Architecture](/pro/get-started/databunker-short-diagram.png)
 
-## 💻 Code Examples: Storing and Retrieving User Records
+## Code Examples: Storing and Retrieving User Records
 
 ### Storing User PII
 
@@ -250,22 +250,13 @@ curl -X POST https://your-databunker-pro/v2/UserGet \
   }'
 ```
 
-## 🛡️ Enterprise Security Features
+## Security controls
 
-Databunker Pro provides enterprise-grade security with **AES-256 encryption**, **role-based access control**, and **comprehensive audit logging**. Built-in compliance with **DPDPA, GDPR, HIPAA, SOC2, and PCI DSS** standards, plus **multi-tenant isolation** and **horizontal scaling** for enterprise deployment.
+Records are encrypted with AES-256, access is governed by [role-based policies](/pro/administration/access-control), and every request is written to the [audit trail](/pro/get-started/security-overview). Tenants are isolated at the database level on PostgreSQL, and the application tier scales horizontally. See the [Security overview](/pro/get-started/security-overview) for the full control set.
 
-## 🎯 Conclusion
+## Next steps
 
-Databunker Pro's PII Vault transforms how organizations handle sensitive data, providing enterprise-grade security that goes far beyond traditional database approaches.
-
-**Key Benefits:**
-
-- **🔒 Zero PII Exposure** - Sensitive data never touches your application databases, logs, or backups
-- **⚡ Simplified Compliance** - Built-in GDPR, HIPAA, SOC2, and PCI DSS controls with automatic audit trails
-- **🛡️ Breach Protection** - Attackers only see meaningless tokens, not actual personal data
-- **🚀 Developer-Friendly** - Easy-to-use APIs that don't slow down development
-- **📈 Enterprise Scale** - Horizontal scaling with multi-region deployment options
-
-**The Bottom Line:** Instead of building complex security layers around your existing database, Databunker Pro's PII Vault eliminates the risk at the source. Your sensitive data stays secure in an encrypted vault while your applications work with safe tokens.
-
-Ready to eliminate PII exposure and simplify compliance? The PII Vault is the modern solution for privacy-by-design architecture.
+- [Search the vault](/pro/concepts/fuzzy-search) — exact, fuzzy, and partial lookups over encrypted records
+- [Tokenize credit cards](/pro/concepts/tokenization) — format-preserving tokens for PCI data
+- [Performance and sizing](/pro/get-started/performance) — measured throughput and instance sizing by record count
+- [Licensing and limits](/pro/get-started/licensing) — what counts as a record

@@ -71,6 +71,8 @@ info:
     url: https://databunker.org/legal/terms/
 
 servers:
+  - url: https://databunker.internal.example.com
+    description: Your self-hosted Databunker Pro deployment
   - url: http://localhost:3000
     description: Local development server
 
