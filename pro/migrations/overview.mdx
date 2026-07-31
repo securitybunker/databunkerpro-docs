@@ -1,0 +1,60 @@
+---
+title: Migrating to Databunker Pro
+sidebarTitle: Overview
+description: How to move existing user records into Databunker Pro — the shared migration pattern, and which guide applies to your source system.
+---
+
+Adopting Databunker Pro means moving user records you already have into the vault and replacing them with tokens. This section covers how to do that without downtime and without a one-way door.
+
+## Pick your source
+
+| Source | Guide |
+| ------ | ----- |
+| A SQL `users` table (PostgreSQL, MySQL, Oracle) | [SQL users table](/pro/migrations/sql-users-table) |
+| AWS Cognito user pool | Coming soon — see [Databunker Pro vs AWS Cognito](/pro/comparisons/aws-cognito-alternative) |
+
+Migrating from something not listed? The pattern below applies to any source. [Contact us](https://cal.com/databunker-team/30min) if you would like the professional-services team to review your plan.
+
+## The shared pattern
+
+Every migration follows the same five phases. Only extraction differs between source systems.
+
+<Steps>
+<Step title="Build a parallel destination">
+Create the token-holding structure alongside the existing one rather than altering it in place. The original stays untouched and readable for the whole migration, which is what makes every earlier phase reversible.
+</Step>
+<Step title="Backfill in chunks">
+Read the source in batches, send each batch to `UserCreateBulk`, and record the returned tokens. Backfilling runs against a live system — the application keeps serving traffic throughout.
+</Step>
+<Step title="Verify">
+Confirm every source record has a token, and that detokenizing returns the original values. Do this before anything is deleted.
+</Step>
+<Step title="Move the application to the vault">
+Dual-write new records, switch reads to the vault, and run in that mode for a full business cycle. Code paths still reading the old data surface here, while recovery is still free.
+</Step>
+<Step title="Cut over and remove the old data">
+Swap in the new structure, keep the old one until you are satisfied, then delete it. This is the only irreversible step.
+</Step>
+</Steps>
+
+## Mechanics common to every migration
+
+**Keep the record whole.** The entire user record goes into the vault profile — not just the obviously sensitive fields, but every application attribute as well. Splitting a user across two stores leaves you reconciling two sources of truth, with some attributes protected and some not. A 120-field profile is normal; that is what the [benchmarks](/pro/get-started/performance) were run against.
+
+**Carry your existing primary key in the profile.** `UserCreateBulk` echoes the submitted profile back alongside each token, so the mapping never depends on response ordering. Putting your source identifier in the indexed `custom` field also makes re-runs safe — a second attempt for the same record is rejected as a duplicate rather than minting a second token — and lets you look records up by legacy id afterwards.
+
+**Expect partial success.** A batch does not fail as a unit. `UserCreateBulk` returns `created` and `errors` arrays, with a per-record `reason` for each failure. The usual cause is a duplicate `email`, `phone`, `login`, or `custom` value: Databunker Pro enforces uniqueness within a tenant, so records your source allowed to coexist are rejected here. Log the failures and resolve them before cutting over — those users have no token.
+
+**Make the backfill resumable.** Skip records that already have a token, so an interrupted run can simply be restarted. For large sources this matters more than raw speed.
+
+**Size the database first.** Bulk writes sustain roughly 5,800 records/sec on one instance, and at tens of millions of rows the **database** becomes the limit rather than Databunker Pro. Check the [sizing guide](/pro/get-started/performance#how-to-size-your-deployment) before a large backfill — adding application instances will not help once the database is at full CPU.
+
+**Check your licence covers the row count.** The record cap is evaluated when a bulk request begins. Trial mode stops at 1,000 records; see [licensing and limits](/pro/get-started/licensing).
+
+<Warning>
+Deleting the source data is the one step you cannot undo from inside Databunker Pro. Take a fresh backup immediately before it, and be aware that removing rows does not remove them from disk or history — values persist in dead tuples, write-ahead logs, replicas, and any earlier backups until those are vacuumed and expired.
+</Warning>
+
+## Rehearse it
+
+Run the whole migration against a copy of your data first, on a non-production vault. [Non-production licence keys](/pro/get-started/licensing#non-production-environments) are available from the portal on a three-month term, so a rehearsal does not consume production record capacity. Between attempts, [wipe the vault](/pro/howtos/clean-users-table) for a clean slate.

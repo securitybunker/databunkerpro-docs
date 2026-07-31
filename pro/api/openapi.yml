@@ -883,7 +883,15 @@ paths:
   /v2/BulkListUsers:
     post:
       summary: List specific users in bulk
-      description: Lists specific users using the bulk unlock mechanism with user search criteria
+      description: |
+        Looks up a batch of users by indexed field (`email`, `phone`, `login`, or `custom`) in a single call,
+        returning the token and profile for each match. Requires a `unlockuuid` from `BulkListUnlock`.
+
+        Every supplied criterion is evaluated — this endpoint is not paginated, so all matches are returned
+        regardless of how many criteria you send. Identities with no stored record are simply absent from
+        `rows` rather than reported as errors.
+
+        Disabled unless the `list_users` configuration flag is on; otherwise returns `403 BulkListUsers is disabled`.
       tags: [Bulk Operations]
       requestBody:
         required: true
@@ -910,14 +918,6 @@ paths:
                       identity:
                         type: string
                         description: User identity to search for (email, phone, login, or custom value)
-                offset:
-                  type: integer
-                  default: 0
-                  description: Offset for pagination
-                limit:
-                  type: integer
-                  default: 10
-                  description: Limit for pagination
                 request_metadata:
                   type: object
                   description: Additional metadata for the request
