@@ -1,0 +1,282 @@
+---
+title: Migrate a SQL users table
+sidebarTitle: SQL users table
+description: Move an existing SQL users table into Databunker Pro — build a token-only newusers table, backfill in chunks with UserCreateBulk, verify, then swap the tables.
+---
+
+This guide moves an existing `users` table into Databunker Pro. The whole user record goes into the vault; your application database keeps nothing but a token.
+
+For the phases and mechanics shared by every migration, see the [migration overview](/pro/migrations/overview).
+
+Rather than altering `users` in place, you build a parallel `newusers` table, backfill it while the application keeps running, verify it, and then swap the two tables in a single transaction. Nothing is destructive until that swap, and the swap itself is reversible.
+
+<Note>
+Timing comes from the [performance benchmarks](/pro/get-started/performance): bulk writes sustain roughly **5,800 records/sec** on a single instance, so 10 M records take about 28 minutes and 100 M around 2.3 hours. At tens of millions of rows the **database** is the limit, not Databunker Pro — see the [sizing guide](/pro/get-started/performance#how-to-size-your-deployment) before starting a large backfill.
+</Note>
+
+## Before you start
+
+- A running Databunker Pro instance and a **root or admin access token**.
+- A [license](/pro/get-started/licensing) whose record cap covers your row count. Trial mode stops at 1,000 records, and the cap is checked when a bulk request begins — see [when the record cap is reached](/pro/get-started/licensing#when-the-record-cap-is-reached).
+- The Python SDK: `pip install databunkerpro psycopg2-binary`
+- A **backup of the users table.**
+
+## Step 1: Create the newusers table
+
+Two columns: your existing primary key, and the token Databunker Pro returns.
+
+```sql
+CREATE TABLE newusers (
+    id        BIGINT PRIMARY KEY,   -- same primary key as users.id
+    usertoken UUID   NOT NULL UNIQUE
+);
+```
+
+Everything else in `users` goes into the encrypted vault profile — not just the personal data, but every application field as well: `created_at`, `status`, `plan`, and the rest. A 120-field profile is entirely normal; that is what the benchmarks were run against.
+
+Keeping the record whole is the point. Split it across two stores and you are back to reconciling two sources of truth for the same user, with some attributes protected and some not.
+
+## Step 2: Decide how tokens map back to rows
+
+`UserCreateBulk` returns the **original profile alongside each token**, so the mapping never depends on response ordering. To use that, carry your primary key inside the profile.
+
+The `custom` field is the best place for it. It is one of the four indexed fields and is unique within a tenant, which buys you two things:
+
+- **A re-run cannot create duplicate tokens.** A second attempt for the same `id` is rejected with `Duplicate custom value` instead of silently minting a second token.
+- **You can look a user up by legacy id later** with `UserGet` using `mode=custom`.
+
+The trade-off is that `custom` is then spoken for. If you need it for something else, use a plain unindexed field such as `legacy_userid` — the mapping still works, but you lose the duplicate protection above.
+
+## Step 3: Backfill in chunks
+
+The script counts the rows, walks the table in chunks of 4,000, sends each chunk to `UserCreateBulk`, and writes `id` plus the returned token into `newusers`. Failures are written to a CSV for review.
+
+Each chunk prints its offset **before** processing it, so if a run is interrupted you can see exactly where it stopped and resume from there:
+
+```sh
+START_OFFSET=2000000 python migrate.py
+```
+
+Resuming matters on a large table. Without it a restart replays every chunk from the beginning — harmless, because the vault rejects records it already holds and `ON CONFLICT DO NOTHING` guards `newusers`, but it re-sends millions of profiles and fills the error log with duplicate reports that bury the genuine conflicts you need to act on.
+
+```python
+import csv
+import os
+import psycopg2
+import psycopg2.extras
+from databunkerpro import DatabunkerproAPI
+
+CHUNK = 4000
+START_OFFSET = int(os.getenv("START_OFFSET", "0"))   # resume point after an interruption
+
+api = DatabunkerproAPI(
+    os.environ["DATABUNKER_API_URL"],       # e.g. https://databunker.internal.example.com
+    os.environ["DATABUNKER_API_TOKEN"],
+    os.getenv("DATABUNKER_TENANT_NAME", ""),
+)
+conn = psycopg2.connect(os.environ["APP_DATABASE_URL"])
+
+
+def count_users():
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM users")
+        return cur.fetchone()[0]
+
+
+def fetch_chunk(offset):
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM users ORDER BY id LIMIT %s OFFSET %s",
+            (CHUNK, offset),
+        )
+        return cur.fetchall()
+
+
+def to_profile(row):
+    """The whole row becomes the vault profile. 'custom' carries the legacy id."""
+    profile = {k: v for k, v in row.items() if k != "id" and v is not None}
+    profile["custom"] = str(row["id"])
+    return profile
+
+
+def save_tokens(created):
+    pairs = [(int(item["profile"]["custom"]), item["token"]) for item in created]
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO newusers (id, usertoken) VALUES %s ON CONFLICT (id) DO NOTHING",
+            pairs,
+        )
+    conn.commit()
+    return len(pairs)
+
+
+def main():
+    total = count_users()
+    migrated, failed = 0, 0
+    print(f"{total} users to migrate, starting at offset {START_OFFSET}")
+
+    # A fresh run starts the error log; a resumed run appends to it.
+    with open("migration-errors.csv", "a" if START_OFFSET else "w", newline="") as fh:
+        errors = csv.writer(fh)
+        if not START_OFFSET:
+            errors.writerow(["id", "reason"])
+
+        for offset in range(START_OFFSET, total, CHUNK):
+            # Printed before the work, so an interrupted run tells you where to resume:
+            # re-run with START_OFFSET set to this value.
+            print(f"offset {offset}/{total}", flush=True)
+            rows = fetch_chunk(offset)
+
+            result = api.create_users_bulk([{"profile": to_profile(r)} for r in rows])
+            if result.get("status") != "ok":
+                # Whole request rejected — nothing was inserted. Stop and investigate.
+                raise SystemExit(f"Batch failed: {result.get('message')}")
+
+            # 'created' echoes the submitted profile, so match on it rather than order.
+            migrated += save_tokens(result.get("created", []))
+
+            for item in result.get("errors", []):
+                errors.writerow([item["profile"].get("custom"), item["reason"]])
+                failed += 1
+
+            print(f"  migrated={migrated} failed={failed}", flush=True)
+
+    print(f"\nDone. Migrated {migrated}, failed {failed}.")
+    if failed:
+        print("Review migration-errors.csv before continuing.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<Warning>
+**Partial success is normal and is not an error.** A batch of 4,000 can return 3,998 in `created` and 2 in `errors`. The usual reason is a duplicate `email`, `phone`, `login`, or `custom` value — Databunker Pro enforces uniqueness per tenant, so rows your old table allowed to coexist will be rejected here. Work through `migration-errors.csv` before continuing; those users have no token and no row in `newusers`, so they would disappear at the swap.
+</Warning>
+
+## Step 4: Verify
+
+<Steps>
+<Step title="Every row made it across">
+
+```sql
+SELECT (SELECT count(*) FROM users)    AS old_rows,
+       (SELECT count(*) FROM newusers) AS new_rows;
+```
+
+The counts must match, or differ only by the rows listed in `migration-errors.csv`.
+
+</Step>
+<Step title="Spot-check detokenization">
+
+Confirm the vault returns what the old table holds:
+
+```python
+row = ...    # a row from users
+token = ...  # its usertoken from newusers
+assert api.get_user("token", token)["profile"]["email"] == row["email"]
+```
+
+</Step>
+<Step title="Confirm the vault count">
+
+`SystemGetSystemStats` — `totalnumrecords` should have grown by the number you migrated. See [checking your usage](/pro/get-started/licensing#checking-your-usage).
+
+</Step>
+</Steps>
+
+### Recover from an interrupted run
+
+If the counts do not match, some rows reached the vault but their tokens were never written locally — the script died between the two writes. Because `custom` holds the legacy id, those tokens can be looked up again in one batch call:
+
+```python
+# reconcile.py — recover tokens for rows missing from newusers
+with conn.cursor() as cur:
+    cur.execute("SELECT id FROM users WHERE id NOT IN (SELECT id FROM newusers)")
+    missing = [r[0] for r in cur.fetchall()]
+
+unlock = api.bulk_list_unlock()["unlockuuid"]
+found = api.bulk_list_users(
+    unlock, [{"mode": "custom", "identity": str(uid)} for uid in missing]
+)
+
+pairs = [(int(r["profile"]["custom"]), r["token"]) for r in found.get("rows", [])]
+
+if pairs:
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO newusers (id, usertoken) VALUES %s ON CONFLICT (id) DO NOTHING",
+            pairs,
+        )
+    conn.commit()
+
+print(f"{len(missing)} missing, {len(pairs)} recovered")
+```
+
+`BulkListUsers` evaluates every criterion you send and is not paginated, so the whole missing set resolves in a single request. Ids with no vault record are simply absent from `rows` — those never reached the vault, so find them in `migration-errors.csv` and resolve the conflict there.
+
+<Note>
+This call requires the `list_users` configuration flag to be enabled, otherwise it returns `403 BulkListUsers is disabled`. The `unlockuuid` is short-lived, so request it immediately before the lookup — and for a very large missing set, work in batches with a fresh unlock for each.
+</Note>
+
+<Warning>
+Run this before Step 6. Once `users` has been renamed and dropped there is nothing left to compare against, and orphaned records cannot be found.
+</Warning>
+
+## Step 5: Point the application at the vault
+
+Do this before swapping anything.
+
+1. **Dual-write.** On user creation, call `UserCreate` and insert the returned token into `newusers` in the same transaction as the `users` row, so new users appear in both tables.
+2. **Switch reads** to fetch the profile from the vault by token. Joins that used `email` can join on `usertoken` — tokens are stable within a tenant, so this needs no round trip to the vault.
+3. **Run in this mode for a full business cycle.** Any code still reading a column directly surfaces here, while the data is present and recovery is free.
+
+## Step 6: Swap the tables
+
+Once step 5 has run clean. In PostgreSQL, DDL is transactional, so both renames commit together and the cutover is effectively instant:
+
+```sql
+BEGIN;
+ALTER TABLE users    RENAME TO users_old;
+ALTER TABLE newusers RENAME TO users;
+COMMIT;
+```
+
+Keep `users_old` until you are satisfied, then drop it:
+
+```sql
+DROP TABLE users_old;
+```
+
+<Warning>
+**Foreign keys follow the table, not the name.** Any table with a foreign key to `users(id)` now references `users_old`, because constraints track the table itself rather than its name. Check before swapping, and recreate the constraints against the new `users` afterwards:
+
+```sql
+SELECT conrelid::regclass AS referencing_table, conname
+  FROM pg_constraint
+ WHERE confrelid = 'users'::regclass AND contype = 'f';
+```
+
+Sequences, indexes, and constraints also keep their original names after a rename. They function normally, but `newusers_pkey` on a table now called `users` is confusing later — rename them if that matters to you.
+</Warning>
+
+<Note>
+Dropping `users_old` removes the personal data from the live table, but **not from disk or from history**. The values remain in dead tuples, the write-ahead log, replicas, and every backup taken before this point. Treat the PII as still present until `VACUUM FULL` has run and those backups have expired.
+</Note>
+
+## Rolling back
+
+| Stage | How to undo |
+| ----- | ----------- |
+| During backfill (steps 1–4) | `users` is untouched. `DROP TABLE newusers` and start again, or [wipe the vault](/pro/howtos/clean-users-table) for a clean rehearsal. |
+| After cutover (step 5) | Revert the application to reading columns from `users`. They are still populated. |
+| After the swap (step 6), `users_old` still present | Reverse the renames in one transaction — the old table still holds every column. |
+| After `DROP TABLE users_old` | Restore from backup. There is no other route back. |
+
+## Next steps
+
+- [Performance and sizing](/pro/get-started/performance) — size the database before a large backfill
+- [Licensing and limits](/pro/get-started/licensing) — what counts as a record
+- [Clean the users table](/pro/howtos/clean-users-table) — reset a test vault between rehearsals

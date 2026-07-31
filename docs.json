@@ -71,6 +71,13 @@
                 ]
               },
               {
+                "group": "Migrations",
+                "pages": [
+                  "pro/migrations/overview",
+                  "pro/migrations/sql-users-table"
+                ]
+              },
+              {
                 "group": "How-tos",
                 "pages": [
                   "pro/howtos/overview",
@@ -80,7 +87,9 @@
               },
               {
                 "group": "Developer tools",
-                "pages": ["pro/developer-tools/overview"]
+                "pages": [
+                  "pro/developer-tools/overview"
+                ]
               }
             ]
           },
@@ -121,7 +130,9 @@
               },
               {
                 "group": "Installation",
-                "pages": ["oss/installation/overview"]
+                "pages": [
+                  "oss/installation/overview"
+                ]
               }
             ]
           },
@@ -130,7 +141,9 @@
             "groups": [
               {
                 "group": "Overview",
-                "pages": ["oss/api/overview"]
+                "pages": [
+                  "oss/api/overview"
+                ]
               }
             ],
             "openapi": {
