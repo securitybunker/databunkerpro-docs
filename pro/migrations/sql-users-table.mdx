@@ -25,12 +25,55 @@ Timing comes from the [performance benchmarks](/pro/get-started/performance): bu
 
 Two columns: your existing primary key, and the token Databunker Pro returns.
 
+<Tabs>
+<Tab title="Standard SQL">
+
 ```sql
 CREATE TABLE newusers (
-    id        BIGINT PRIMARY KEY,   -- same primary key as users.id
+    userid    BIGINT PRIMARY KEY,   -- same value as users.userid
     usertoken UUID   NOT NULL UNIQUE
 );
 ```
+
+`userid` is copied from `users.userid`, so no generator is needed for the backfill itself.
+
+</Tab>
+<Tab title="PostgreSQL">
+
+```sql
+CREATE TABLE newusers (
+    userid    BIGSERIAL PRIMARY KEY,   -- same value as users.userid
+    usertoken UUID      NOT NULL UNIQUE
+);
+```
+
+Use `SERIAL` if your existing `userid` is a 32-bit `INTEGER`.
+
+</Tab>
+<Tab title="MySQL">
+
+```sql
+CREATE TABLE newusers (
+    userid    BIGINT   NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    usertoken CHAR(36) NOT NULL UNIQUE
+) ENGINE=InnoDB;
+```
+
+MySQL has no native UUID column — `CHAR(36)` stores the token as returned.
+
+</Tab>
+</Tabs>
+
+<Warning>
+**On PostgreSQL, reset the sequence before you cut over.** Explicit id inserts do not advance a `SERIAL` sequence, so it is still at 1 while your ids run into the millions, and the first insert after the swap collides with an existing row:
+
+```sql
+SELECT setval(pg_get_serial_sequence('newusers', 'userid'),
+              (SELECT max(userid) FROM newusers));
+```
+
+MySQL needs no equivalent — `AUTO_INCREMENT` advances itself when you insert a higher explicit value.
+</Warning>
 
 Everything else in `users` goes into the encrypted vault profile — not just the personal data, but every application field as well: `created_at`, `status`, `plan`, and the rest. A 120-field profile is entirely normal; that is what the benchmarks were run against.
 
@@ -42,14 +85,16 @@ Keeping the record whole is the point. Split it across two stores and you are ba
 
 The `custom` field is the best place for it. It is one of the four indexed fields and is unique within a tenant, which buys you two things:
 
-- **A re-run cannot create duplicate tokens.** A second attempt for the same `id` is rejected with `Duplicate custom value` instead of silently minting a second token.
-- **You can look a user up by legacy id later** with `UserGet` using `mode=custom`.
+- **A re-run cannot create duplicate tokens.** A second attempt for the same `userid` is rejected with `Duplicate custom value` instead of silently minting a second token.
+- **You can look a user up by `userid` later** with `UserGet` using `mode=custom`.
 
 The trade-off is that `custom` is then spoken for. If you need it for something else, use a plain unindexed field such as `legacy_userid` — the mapping still works, but you lose the duplicate protection above.
 
 ## Step 3: Backfill in chunks
 
-The script counts the rows, walks the table in chunks of 4,000, sends each chunk to `UserCreateBulk`, and writes `id` plus the returned token into `newusers`. Failures are written to a CSV for review.
+The script counts the rows, walks the table in chunks of 4,000, sends each chunk to `UserCreateBulk`, and writes `userid` plus the returned token into `newusers`. Failures are written to a CSV for review.
+
+It is written for PostgreSQL. On MySQL, swap `psycopg2` for your connector and `ON CONFLICT (userid) DO NOTHING` for `INSERT IGNORE`.
 
 Each chunk prints its offset **before** processing it, so if a run is interrupted you can see exactly where it stopped and resume from there:
 
@@ -86,16 +131,16 @@ def count_users():
 def fetch_chunk(offset):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            "SELECT * FROM users ORDER BY id LIMIT %s OFFSET %s",
+            "SELECT * FROM users ORDER BY userid LIMIT %s OFFSET %s",
             (CHUNK, offset),
         )
         return cur.fetchall()
 
 
 def to_profile(row):
-    """The whole row becomes the vault profile. 'custom' carries the legacy id."""
-    profile = {k: v for k, v in row.items() if k != "id" and v is not None}
-    profile["custom"] = str(row["id"])
+    """The whole row becomes the vault profile; 'custom' carries userid for lookups."""
+    profile = {k: v for k, v in row.items() if v is not None}
+    profile["custom"] = str(row["userid"])
     return profile
 
 
@@ -104,7 +149,8 @@ def save_tokens(created):
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(
             cur,
-            "INSERT INTO newusers (id, usertoken) VALUES %s ON CONFLICT (id) DO NOTHING",
+            "INSERT INTO newusers (userid, usertoken) VALUES %s "
+            "ON CONFLICT (userid) DO NOTHING",
             pairs,
         )
     conn.commit()
@@ -120,7 +166,7 @@ def main():
     with open("migration-errors.csv", "a" if START_OFFSET else "w", newline="") as fh:
         errors = csv.writer(fh)
         if not START_OFFSET:
-            errors.writerow(["id", "reason"])
+            errors.writerow(["userid", "reason"])
 
         for offset in range(START_OFFSET, total, CHUNK):
             # Printed before the work, so an interrupted run tells you where to resume:
@@ -188,37 +234,54 @@ assert api.get_user("token", token)["profile"]["email"] == row["email"]
 
 ### Recover from an interrupted run
 
-If the counts do not match, some rows reached the vault but their tokens were never written locally — the script died between the two writes. Because `custom` holds the legacy id, those tokens can be looked up again in one batch call:
+If the counts do not match, some rows reached the vault but their tokens were never written locally — the script died between the two writes. Because `custom` holds the legacy id, those tokens can be looked up again and written into `newusers`:
 
 ```python
-# reconcile.py — recover tokens for rows missing from newusers
+# reconcile.py — recover tokens for rows missing from newusers.
+# Reuses the imports, `api`, and `conn` from the backfill script above.
+CHUNK = 4000
+
 with conn.cursor() as cur:
-    cur.execute("SELECT id FROM users WHERE id NOT IN (SELECT id FROM newusers)")
+    cur.execute("SELECT userid FROM users WHERE userid NOT IN (SELECT userid FROM newusers)")
     missing = [r[0] for r in cur.fetchall()]
 
-unlock = api.bulk_list_unlock()["unlockuuid"]
-found = api.bulk_list_users(
-    unlock, [{"mode": "custom", "identity": str(uid)} for uid in missing]
-)
+print(f"{len(missing)} users without a token")
+recovered = 0
 
-pairs = [(int(r["profile"]["custom"]), r["token"]) for r in found.get("rows", [])]
+for offset in range(0, len(missing), CHUNK):
+    batch = missing[offset:offset + CHUNK]
 
-if pairs:
-    with conn.cursor() as cur:
-        psycopg2.extras.execute_values(
-            cur,
-            "INSERT INTO newusers (id, usertoken) VALUES %s ON CONFLICT (id) DO NOTHING",
-            pairs,
-        )
-    conn.commit()
+    # The unlock UUID is short-lived, so take a fresh one for each chunk.
+    unlock = api.bulk_list_unlock()["unlockuuid"]
+    found = api.bulk_list_users(
+        unlock, [{"mode": "custom", "identity": str(uid)} for uid in batch]
+    )
 
-print(f"{len(missing)} missing, {len(pairs)} recovered")
+    pairs = [(int(r["profile"]["custom"]), r["token"]) for r in found.get("rows", [])]
+    if pairs:
+        with conn.cursor() as cur:
+            psycopg2.extras.execute_values(
+                cur,
+                "INSERT INTO newusers (userid, usertoken) VALUES %s "
+                "ON CONFLICT (userid) DO NOTHING",
+                pairs,
+            )
+        conn.commit()
+
+    recovered += len(pairs)
+    print(f"  {offset + len(batch)}/{len(missing)} checked, {recovered} recovered",
+          flush=True)
+
+print(f"\n{len(missing)} missing, {recovered} recovered, "
+      f"{len(missing) - recovered} never reached the vault")
 ```
 
-`BulkListUsers` evaluates every criterion you send and is not paginated, so the whole missing set resolves in a single request. Ids with no vault record are simply absent from `rows` — those never reached the vault, so find them in `migration-errors.csv` and resolve the conflict there.
+`BulkListUsers` is not paginated — every criterion you send is evaluated — so the chunking here is about keeping request bodies and unlock lifetimes sane, not about paging through results. Ids with no vault record are simply absent from `rows`: those never reached the vault, so find them in `migration-errors.csv` and resolve the conflict there.
+
+Re-running is safe. Each pass recomputes `missing` from the two tables, so recovered rows drop out and only genuine gaps remain.
 
 <Note>
-This call requires the `list_users` configuration flag to be enabled, otherwise it returns `403 BulkListUsers is disabled`. The `unlockuuid` is short-lived, so request it immediately before the lookup — and for a very large missing set, work in batches with a fresh unlock for each.
+This call requires the `list_users` configuration flag to be enabled, otherwise it returns `403 BulkListUsers is disabled`.
 </Note>
 
 <Warning>
@@ -235,7 +298,12 @@ Do this before swapping anything.
 
 ## Step 6: Swap the tables
 
-Once step 5 has run clean. In PostgreSQL, DDL is transactional, so both renames commit together and the cutover is effectively instant:
+Once step 5 has run clean. Both renames must land together, or requests arriving in between hit a missing table.
+
+<Tabs>
+<Tab title="PostgreSQL">
+
+DDL is transactional, so both renames commit as one and the cutover is effectively instant:
 
 ```sql
 BEGIN;
@@ -244,14 +312,28 @@ ALTER TABLE newusers RENAME TO users;
 COMMIT;
 ```
 
+</Tab>
+<Tab title="MySQL">
+
+DDL auto-commits, so a transaction gives you nothing here. Use `RENAME TABLE`, which swaps both in a single atomic statement:
+
+```sql
+RENAME TABLE users TO users_old, newusers TO users;
+```
+
+</Tab>
+</Tabs>
+
 Keep `users_old` until you are satisfied, then drop it:
 
 ```sql
 DROP TABLE users_old;
 ```
 
+If other tables have foreign keys pointing at it, the drop is refused until those constraints are dropped or repointed at the new `users`.
+
 <Warning>
-**Foreign keys follow the table, not the name.** Any table with a foreign key to `users(id)` now references `users_old`, because constraints track the table itself rather than its name. Check before swapping, and recreate the constraints against the new `users` afterwards:
+**Foreign keys follow the table, not the name.** Any table with a foreign key to `users(userid)` now references `users_old`, because constraints track the table itself rather than its name. Check before swapping, and recreate the constraints against the new `users` afterwards:
 
 ```sql
 SELECT conrelid::regclass AS referencing_table, conname
