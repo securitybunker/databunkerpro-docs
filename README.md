@@ -70,15 +70,8 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Shamir keys](pro/administration/shamir-keys.mdx)** — rewritten around share custody: hex format, distribution across custodians *and* systems, audit cadence, and what happens below the three-share threshold | Half of question 5 |
 | **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
-| **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*, with an overview carrying the five phases and mechanics shared by any source system | Question 8 |
-| **[Migrate a SQL users table](pro/migrations/sql-users-table.mdx)** — new page: `newusers` table (PostgreSQL/MySQL), chunked `UserCreateBulk` backfill with `START_OFFSET` resume, batched reconcile via `BulkListUsers`, verification, atomic table swap, rollback matrix | Question 8 |
+| **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 | Supporting fixes — the 14-day trial window (previously undocumented, a silent day-15 failure), all licence-key paths routed through the portal, `record-versioning` note that versions do not multiply record count, `errors.mdx` cross-links, the Pro `openapi.yml` licence corrected from MIT to commercial terms, and `offset`/`limit` removed from `BulkListUsers` (documented but never implemented) | — |
-
-**Corrections that came out of this work.** Writing the licensing page surfaced two code
-deltas in `LicenseGetLimitations` (`databunkerpro/src/license_api.go`): the trial cap returned
-10,000 records instead of 1,000, and the trial period was 30 days instead of 14. Both are fixed on
-the `fix-trial-license-limits` branch. Documenting a mechanism against its source tends to find
-these; it is worth doing deliberately.
 
 **Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
 root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2), the
@@ -297,7 +290,7 @@ because the plumbing already exists.
 4. ⚠️ Remove emoji from all headings — all 9 removed; `access-control.mdx` still has `## Why Choose CRBAC?`, and body ✅/❌ markers were kept.
 5. ✅ Add a non-localhost entry to `openapi.yml` `servers:`.
 6. Add `⏱`/prerequisites callouts to the four install pages.
-7. Wrap the FAQ in `<Accordion>`.
+7. ✅ Wrap the FAQ in `<Accordion>`.
 8. Fix the hardcoded white background on the architecture diagram.
 9. Delete the duplicated multi-tenancy/error tables from `openapi.yml` `info.description`, linking to `/pro/api/overview` instead.
 10. Publish a `changelog.mdx` with the last five releases.
