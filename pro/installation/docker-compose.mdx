@@ -99,8 +99,8 @@ Copy the access code, then press `Ctrl-C` to leave the log view. This only stops
 <Step title="Access the web interface">
 In your browser, open [localhost:3000](http://localhost:3000) to access the Databunker web interface.
 </Step>
-<Step title="Follow the instructions in web interface">
-For detailed instructions, see [Generate admin credentials](/pro/installation/generate-admin-credentials).
+<Step title="Last Step: Generate admin credentials">
+Continue to **[Generate admin credentials](/pro/installation/generate-admin-credentials)** to submit the access code, apply a license key, and capture your root access token, wrapping key, and Shamir key shares.
 </Step>
 </Steps>
 
@@ -113,13 +113,3 @@ If you chose the Oracle stack, a few things differ from PostgreSQL and MySQL:
 - **Passwords are short by design.** Oracle limits passwords to 30 bytes and parses them as identifiers, so `generate-env-files.sh` produces a short, letter-initial, alphanumeric password.
 - **TLS is opt-in** and requires an Oracle wallet. Run `./generate-env-files.sh ssl` and see `docker-compose-oracle/README.md` for the two-step setup.
 - `./oracle.sh` opens a `sqlplus` session as the schema user.
-
-<Note>
-
-To stop all Docker Compose services and clean up resources, run the following command:
-
-```sh
-docker compose down
-```
-
-</Note>
