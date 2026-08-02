@@ -74,7 +74,8 @@
                 "group": "Migrations",
                 "pages": [
                   "pro/migrations/overview",
-                  "pro/migrations/sql-users-table"
+                  "pro/migrations/sql-users-table",
+                  "pro/migrations/aws-cognito"
                 ]
               },
               {

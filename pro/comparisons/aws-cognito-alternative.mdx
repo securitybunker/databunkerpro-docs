@@ -94,6 +94,8 @@ The application database only ever stores: a user identifier, a Databunker `user
 
 ## Migration from Cognito
 
+For the full procedure — export script, attribute mapping, verification, and rollback — see [Migrate from AWS Cognito](/pro/migrations/aws-cognito).
+
 The honest practical answer: **Cognito does not allow exporting password hashes**, so a migration is necessarily a forced-reset event. The standard playbook:
 
 1. **Stand up Databunker Pro** in your target environment (Docker / Helm).

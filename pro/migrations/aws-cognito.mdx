@@ -1,0 +1,264 @@
+---
+title: Migrate from AWS Cognito
+sidebarTitle: AWS Cognito
+description: Move user attributes out of a Cognito user pool into Databunker Pro — export with ListUsers, import with UserCreateBulk, then cut over authentication with a one-time password reset.
+---
+
+This guide moves the user records in an AWS Cognito user pool into Databunker Pro.
+
+For the phases and mechanics shared by every migration, see the [migration overview](/pro/migrations/overview). For why teams replace Cognito with an auth library plus a PII vault, see [AWS Cognito vs Databunker Pro](/pro/comparisons/aws-cognito-alternative).
+
+<Warning>
+**Cognito does not export password hashes.** There is no API that returns them, so no migration can carry passwords across. Every user must either set a new password once, or sign in through a federated provider. Plan the migration around that constraint — it drives the timing of every other step.
+</Warning>
+
+## What moves where
+
+Cognito is doing two jobs: authenticating users, and storing their attributes. Databunker Pro replaces only the second.
+
+| Cognito holds | After migration |
+| ------------- | --------------- |
+| Passwords, MFA enrolment, federated identities | Your new [auth layer](/pro/comparisons/aws-cognito-alternative#authentication-is-now-an-afternoon-not-a-project) |
+| `email`, `phone_number`, `given_name`, custom attributes | Databunker Pro vault |
+| `sub` (immutable user id) | Databunker Pro vault, in the indexed `custom` field |
+| Groups | Databunker Pro groups, or your auth layer |
+
+## Before you start
+
+- A running Databunker Pro instance and a **root or admin access token**.
+- A [license](/pro/get-started/licensing) whose record cap covers your user count.
+- AWS credentials with `cognito-idp:ListUsers` on the pool.
+- `pip install databunkerpro boto3`
+- Your replacement auth layer built and tested, but not yet live.
+
+## No mapping table needed
+
+Unlike a [SQL users table migration](/pro/migrations/sql-users-table), there is nothing here to keep in step with the vault. Cognito's `sub` goes into the indexed `custom` field, so any user can be resolved directly:
+
+```python
+api.get_user("custom", sub)
+```
+
+The token belongs on your new auth layer's user row — next to the password hash and MFA secret — and that row is created when the user first signs in, not now. So this migration writes only to the vault.
+
+## Step 1: Export and import
+
+`ListUsers` returns at most 60 users per page and is throttled, so the export is usually the slow part — not the import. The script below pages through the pool, accumulates users into batches, and sends each batch to `UserCreateBulk`.
+
+Cognito returns attributes as a list of name/value pairs, so they are flattened first, then mapped onto the fields Databunker Pro indexes:
+
+| Cognito | Vault field | Notes |
+| ------- | ----------- | ----- |
+| `sub` | `custom` | Always present. Makes every record findable by its Cognito id. |
+| `email` | `email` | Only if your pool collects it — email is not mandatory. |
+| `phone_number` | `phone` | Copied under the name Databunker Pro indexes. |
+| `Username` | `login` | Skipped when it equals `sub`: pools configured with `UsernameAttributes: ["email"]` generate an opaque UUID rather than a real sign-in name. |
+
+Everything else is carried across unchanged, including `custom:*` attributes.
+
+```python
+import csv
+import os
+import boto3
+from databunkerpro import DatabunkerproAPI
+
+CHUNK = 1000
+POOL_ID = os.environ["COGNITO_USER_POOL_ID"]
+
+cognito = boto3.client("cognito-idp", region_name=os.environ["AWS_REGION"])
+api = DatabunkerproAPI(
+    os.environ["DATABUNKER_API_URL"],
+    os.environ["DATABUNKER_API_TOKEN"],
+    os.getenv("DATABUNKER_TENANT_NAME", ""),
+)
+
+
+def to_profile(user):
+    """Flatten Cognito attributes into a vault profile keyed by 'sub'."""
+    attrs = {a["Name"]: a["Value"] for a in user["Attributes"]}
+    profile = dict(attrs)
+    profile["custom"] = attrs["sub"]              # indexed: always present
+    if "phone_number" in attrs:
+        profile["phone"] = attrs["phone_number"]  # indexed field name in Databunker Pro
+    if user["Username"] != attrs["sub"]:
+        profile["login"] = user["Username"]       # indexed: the real sign-in name
+    profile["cognito_status"] = user["UserStatus"]
+    profile["cognito_enabled"] = user["Enabled"]
+    return profile
+
+
+def create_bulk_users(batch, errors):
+    result = api.create_users_bulk([{"profile": p} for p in batch])
+    if result.get("status") != "ok":
+        raise SystemExit(f"Batch failed: {result.get('message')}")
+    for item in result.get("errors", []):
+        errors.writerow([item["profile"].get("custom"), item["reason"]])
+    return len(result.get("created", [])), len(result.get("errors", []))
+
+
+def main():
+    migrated, failed, batch = 0, 0, []
+
+    with open("cognito-errors.csv", "w", newline="") as fh:
+        errors = csv.writer(fh)
+        errors.writerow(["sub", "reason"])
+
+        paginator = cognito.get_paginator("list_users")
+        for page in paginator.paginate(UserPoolId=POOL_ID):
+            batch.extend(to_profile(u) for u in page["Users"])
+            if len(batch) >= CHUNK:
+                ok, bad = create_bulk_users(batch, errors)
+                migrated, failed, batch = migrated + ok, failed + bad, []
+                print(f"migrated={migrated} failed={failed}", flush=True)
+
+        if batch:
+            ok, bad = create_bulk_users(batch, errors)
+            migrated, failed = migrated + ok, failed + bad
+
+    print(f"\nDone. Migrated {migrated}, failed {failed}.")
+    if failed:
+        print("Review cognito-errors.csv before continuing.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<Note>
+Cognito allows two accounts to hold the same email when the pool is not configured to require uniqueness. Databunker Pro enforces uniqueness per tenant, so the second one is rejected with `Duplicate email value` and appears in `cognito-errors.csv`. Decide which account survives before cutting over.
+</Note>
+
+### Groups
+
+If you use Cognito groups, export them separately — `ListUsersInGroup` per group is far cheaper than one `AdminListGroupsForUser` call per user:
+
+```python
+for group in cognito.get_paginator("list_groups").paginate(UserPoolId=POOL_ID):
+    for g in group["Groups"]:
+        members = cognito.get_paginator("list_users_in_group").paginate(
+            UserPoolId=POOL_ID, GroupName=g["GroupName"]
+        )
+        # map each member's 'sub' to a Databunker group or a role in your auth layer
+```
+
+## Step 2: Verify
+
+<Steps>
+<Step title="Counts match">
+
+`SystemGetSystemStats` — `totalnumrecords` should have grown by the pool's user count, less anything in `cognito-errors.csv`.
+
+</Step>
+<Step title="Spot-check detokenization">
+
+```python
+sub = ...  # a known Cognito sub
+print(api.get_user("custom", sub)["profile"]["email"])
+```
+
+Because `sub` went into `custom`, any user resolves by their Cognito id directly.
+
+</Step>
+<Step title="Re-run to catch stragglers">
+
+Users created in Cognito while the export was running will have been missed. Re-run the script — already-migrated records come back as `Duplicate custom value` in the error CSV, and only the new ones are added.
+
+</Step>
+</Steps>
+
+## Step 3: Cut over authentication
+
+This is the step that affects users, so it is worth staging.
+
+<Steps>
+<Step title="Point the new auth layer at Databunker Pro">
+
+Sign-in looks the user up by email, reads the profile from the vault by token, and issues your own session. No Cognito call remains in the path.
+
+</Step>
+<Step title="Trigger the password reset">
+
+Email every user a one-time reset link. Send in waves rather than all at once, so support load and email-reputation damage stay manageable.
+
+</Step>
+<Step title="Keep Cognito readable during the transition">
+
+Leave the pool in place but stop writing to it. If something is missing you can still read it, and users who have not reset yet can be identified from `cognito_status` in their vault profile.
+
+</Step>
+</Steps>
+
+<Tip>
+Federated users — Google, Apple, SAML — need no password reset. Their identity lives with the external provider, so re-pointing your auth layer at the same provider signs them straight back in. Migrating those users first shrinks the population that needs a reset email.
+</Tip>
+
+## Step 4: Decommission the pool
+
+Once the reset campaign has run its course and Cognito has served no sign-ins for a full business cycle, delete the user pool.
+
+<Warning>
+Deleting a Cognito user pool is immediate and irreversible, and there is no export of what it held. Confirm every user is in the vault first, and keep a copy of your export output until you are certain.
+</Warning>
+
+## Working with the vault afterwards
+
+The calls that replace the Cognito operations you were making before. Every one of the four indexed fields — `email`, `phone`, `login`, `custom` — works as a lookup key, so you rarely need the token itself.
+
+**Sign-in: look a user up by email**
+
+```python
+result = api.get_user("email", "jane@example.com")
+if result.get("status") != "ok":
+    raise ValueError("no such user")
+
+token   = result["token"]              # store this on the auth row you create
+profile = result["profile"]            # given_name, phone, custom:* — as migrated
+```
+
+Replaces `AdminGetUser`. The same call works with `"phone"`, `"login"`, or `"custom"` — use `custom` when you hold the Cognito `sub`:
+
+```python
+api.get_user("custom", "9f8b1c2e-...")
+```
+
+**Update a profile**
+
+```python
+api.update_user("email", "jane@example.com", {"phone": "+15551234567"})
+```
+
+Replaces `AdminUpdateUserAttributes`. Only the fields you pass are changed.
+
+**Delete a user (right to erasure)**
+
+```python
+api.delete_user("email", "jane@example.com")
+```
+
+Replaces `AdminDeleteUser` — but unlike Cognito this erases the personal data itself, since it lived only in the vault. The audit trail records the deletion without retaining the data.
+
+**Check whether someone exists, without reading their data**
+
+```python
+exists = api.get_user("email", candidate).get("status") == "ok"
+```
+
+Useful during the reset campaign, where you want to know whether an address belongs to a migrated user before sending mail to it.
+
+<Tip>
+`UserGet` returns `404` for an unknown identity, so treat a non-`ok` status as "not found" rather than an error. Every call is written to the [audit trail](/pro/get-started/security-overview), including the ones that find nothing.
+</Tip>
+
+## Rolling back
+
+| Stage | How to undo |
+| ----- | ----------- |
+| During export and import | Nothing in Cognito has changed. [Wipe the vault](/pro/howtos/clean-users-table) and start again. |
+| After the auth cutover | Point the application back at Cognito. Passwords still work — users who already reset must use their old Cognito password. |
+| After deleting the pool | No route back. Rebuild from your export output. |
+
+## Next steps
+
+- [Migrate a SQL users table](/pro/migrations/sql-users-table) — if application data also lives in your own database
+- [Licensing and limits](/pro/get-started/licensing) — what counts as a record
+- [AWS Cognito vs Databunker Pro](/pro/comparisons/aws-cognito-alternative) — the architecture this migration lands on

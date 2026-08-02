@@ -70,7 +70,9 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Shamir keys](pro/administration/shamir-keys.mdx)** — rewritten around share custody: hex format, distribution across custodians *and* systems, audit cadence, and what happens below the three-share threshold | Half of question 5 |
 | **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
-| Supporting fixes — the 14-day trial window (previously undocumented, a silent day-15 failure), all licence-key paths routed through the portal, `record-versioning` note that versions do not multiply record count, `errors.mdx` cross-links, and the Pro `openapi.yml` licence corrected from MIT to commercial terms | — |
+| **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*, with an overview carrying the five phases and mechanics shared by any source system | Question 8 |
+| **[Migrate a SQL users table](pro/migrations/sql-users-table.mdx)** — new page: `newusers` table (PostgreSQL/MySQL), chunked `UserCreateBulk` backfill with `START_OFFSET` resume, batched reconcile via `BulkListUsers`, verification, atomic table swap, rollback matrix | Question 8 |
+| Supporting fixes — the 14-day trial window (previously undocumented, a silent day-15 failure), all licence-key paths routed through the portal, `record-versioning` note that versions do not multiply record count, `errors.mdx` cross-links, the Pro `openapi.yml` licence corrected from MIT to commercial terms, and `offset`/`limit` removed from `BulkListUsers` (documented but never implemented) | — |
 
 **Corrections that came out of this work.** Writing the licensing page surfaced two code
 deltas in `LicenseGetLimitations` (`databunkerpro/src/license_api.go`): the trial cap returned
@@ -79,8 +81,8 @@ the `fix-trial-license-limits` branch. Documenting a mechanism against its sourc
 these; it is worth doing deliberately.
 
 **Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
-root-token compromise). **Still the highest-value remaining gap:** the users-table migration guide
-(P0.3), followed by the Pro quickstart (P0.2) and the production checklist (P0.4).
+root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2), the
+production checklist (P0.4), and a changelog (P1.7).
 
 ### Sites benchmarked
 
@@ -119,7 +121,7 @@ root-token compromise). **Still the highest-value remaining gap:** the users-tab
 | 5 | What breaks, and how badly? | ⚠️ | Key-loss failure modes and the recovery matrix are now documented (see [Done so far](#done-so-far)). Still missing: a threat model, and the other failure modes — database loss, root-token compromise. |
 | 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
 | 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
-| 8 | Migration path in (and out)? | ❌ | Nothing. This is the #1 blocking question for anyone with an existing `users` table. |
+| 8 | Migration path in (and out)? | ⚠️ | A [Migrations](pro/migrations/overview.mdx) group now covers moving a SQL `users` table in. Still missing: a Cognito guide, and the sanctioned bulk-export path for getting data *out*. |
 | 9 | Is the project alive? | ❌ | No changelog, no releases, no version support policy. |
 | 10 | How does it compare to alternatives? | ✅ | Three comparison pages exist (Cognito, Vault, build-your-own). Good — but filed under *Guides*, where an evaluator won't look. |
 
@@ -146,18 +148,11 @@ Show it in four tabs (`curl`, JS, Python, Java) using the actual SDKs. End with 
 links (search, tokenize a card, migrate your users table). Put a **"⏱ 5 minutes"** badge and a
 prerequisites `<Note>` at the top — every one of the 13 sites does this.
 
-#### P0.3 `pro/integrate/migrate-users-table.mdx` — "Migrate an existing users table"
+#### ✅ P0.3 Migrate an existing users table
 
-The single highest-value missing page. Basis Theory makes *Migrations* a top-level use case;
-ClickHouse puts *Migration guides* inside Get Started. Every ingredient already exists here:
-
-- `UserCreateBulk` at ~5,800 rec/s measured (and the honest "the database becomes the bottleneck" caveat)
-- The published loader scripts in `databunkerpro-python`
-- The fact — currently buried in `pii-vault.mdx` §2 — that **tokens are stable, deterministic join keys within a tenant**, so a SQL join on `email` becomes a join on `user_token` with no vault round-trip
-
-Structure it as: assess → dual-write → backfill → verify → cut over `email` column to `user_token` →
-rollback plan → decommission. Include the downtime estimate straight from the sizing table
-(10 M ≈ 28 min, 100 M ≈ 2.3 h).
+Shipped as its own [Migrations](pro/migrations/overview.mdx) group rather than a single page, so
+Cognito and other sources can sit alongside the [SQL guide](pro/migrations/sql-users-table.mdx)
+without repeating the shared pattern.
 
 #### P0.4 `pro/deploy/production-checklist.mdx`
 
