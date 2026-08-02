@@ -71,7 +71,6 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
-| Supporting fixes — the 14-day trial window (previously undocumented, a silent day-15 failure), all licence-key paths routed through the portal, `record-versioning` note that versions do not multiply record count, `errors.mdx` cross-links, the Pro `openapi.yml` licence corrected from MIT to commercial terms, and `offset`/`limit` removed from `BulkListUsers` (documented but never implemented) | — |
 
 **Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
 root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2), the
