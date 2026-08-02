@@ -17,10 +17,12 @@ favicon.svg  logo/        Site branding.
 
 pro/                      Databunker Pro (commercial, self-hosted)
   get-started/            Overview, PII vault, architecture, security, performance, FAQ
-  installation/           Docker Compose, Kubernetes/Helm, unattended, Oracle backend, credentials
+  installation/           Docker Compose, Kubernetes/Helm, unattended, Oracle backend,
+                          credentials, production checklist
   administration/         Master key, key rotation, Shamir shares, multi-tenancy, access control
   concepts/               Tokenization, file vault, search, versioning, sub-accounts, deployment
   comparisons/            vs AWS Cognito, vs HashiCorp Vault, vs building it yourself
+  migrations/             Moving existing users in: SQL users table, AWS Cognito
   howtos/                 Short task-focused operational guides
   developer-tools/        SDK index
   api/                    overview / authentication / errors / pagination + openapi.yml (/v2)
@@ -70,11 +72,12 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Shamir keys](pro/administration/shamir-keys.mdx)** — rewritten around share custody: hex format, distribution across custodians *and* systems, audit cadence, and what happens below the three-share threshold | Half of question 5 |
 | **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
+| **[Production checklist](pro/installation/production-checklist.mdx)** — new page: a go-live gate covering keys, database, network, access control, backup, licence capacity, and monitoring, linking out to the deep pages | Question 4 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 
 **Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
-root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2), the
-production checklist (P0.4), and a changelog (P1.7).
+root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2),
+backup and recovery (P0.5), and a changelog (P1.7).
 
 ### Sites benchmarked
 
@@ -109,11 +112,11 @@ production checklist (P0.4), and a changelog (P1.7).
 | 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off `pii-vault.mdx` and `architecture.mdx`, and performance promoted to position 2. Still missing: a hub page and a Pro-vs-OSS decision page. |
 | 2 | Can my team integrate it in one sprint? | ❌ | No Pro quickstart, no framework guides, SDK page is 4 links to GitHub (32 lines, no install command, no example). |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
-| 4 | How do we run it in production? | ❌ | No production checklist, no HA/scaling guide, no monitoring, no upgrade path. |
+| 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) now gates go-live. Still missing: monitoring and upgrade/version-support pages. |
 | 5 | What breaks, and how badly? | ⚠️ | Key-loss failure modes and the recovery matrix are now documented (see [Done so far](#done-so-far)). Still missing: a threat model, and the other failure modes — database loss, root-token compromise. |
 | 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
 | 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
-| 8 | Migration path in (and out)? | ⚠️ | A [Migrations](pro/migrations/overview.mdx) group now covers moving a SQL `users` table in. Still missing: a Cognito guide, and the sanctioned bulk-export path for getting data *out*. |
+| 8 | Migration path in (and out)? | ⚠️ | A [Migrations](pro/migrations/overview.mdx) group covers moving in from a [SQL users table](pro/migrations/sql-users-table.mdx) or [AWS Cognito](pro/migrations/aws-cognito.mdx). Still missing: the sanctioned bulk-export path for getting data *out*. |
 | 9 | Is the project alive? | ❌ | No changelog, no releases, no version support policy. |
 | 10 | How does it compare to alternatives? | ✅ | Three comparison pages exist (Cognito, Vault, build-your-own). Good — but filed under *Guides*, where an evaluator won't look. |
 
@@ -146,14 +149,13 @@ Shipped as its own [Migrations](pro/migrations/overview.mdx) group rather than a
 Cognito and other sources can sit alongside the [SQL guide](pro/migrations/sql-users-table.mdx)
 without repeating the shared pattern.
 
-#### P0.4 `pro/deploy/production-checklist.mdx`
+#### ✅ P0.4 Production checklist
 
-Everything an infra lead needs before go-live, currently scattered across `security-overview`,
-`architecture`, `master-key`, `shamir-keys`, `select-security` and the FAQ. Steal Basis Theory's
-six-bucket shape: **Keys & secrets · Database · Network/TLS · Access control · Backup & recovery · Observability**.
-Make it a literal checklist with links out to the deep pages.
+Shipped as [`pro/installation/production-checklist.mdx`](pro/installation/production-checklist.mdx) —
+placed in *Installation* rather than a new *Deploy* group, since it is a one-time go-live gate rather
+than an ongoing operational task.
 
-#### P0.5 `pro/deploy/backup-and-recovery.mdx`
+#### P0.5 `pro/installation/backup-and-recovery.mdx`
 
 For a vault, this is the fear that kills deals. State plainly:
 
@@ -164,7 +166,7 @@ For a vault, this is the fear that kills deals. State plainly:
 
 ### Priority 1 — evaluation and integration surface
 
-#### P1.1 Promote the buried gold: `pro/evaluate/security-and-compliance.mdx`
+#### P1.1 Promote the buried gold: `pro/get-started/security-compliance.mdx`
 
 Lift FAQ answers 6–8 into a real page: framework-by-framework control mapping (GDPR Art. 25/32,
 PCI DSS scope reduction via tokenization, HIPAA §164.312, DPDPA, RBI localisation, ISO 27001, SOC 2),
@@ -172,14 +174,14 @@ the FIPS 140-2 detail, current attestation status, and the IRAP boundary-inherit
 **Keep the MD5 disclosure.** That kind of candour is what makes a security reviewer trust the rest
 of the document — it is a feature, not a liability, and right now it's hidden in a Q&A.
 
-#### P1.2 `pro/evaluate/threat-model.mdx` — including what Databunker does *not* protect
+#### P1.2 `pro/get-started/threat-model.mdx` — including what Databunker does *not* protect
 
 No page currently says: *if your application server is compromised, an attacker holding a valid token
 can call the API.* Say it, then show the mitigations already shipped — masking policies, RBAC,
 `select-security` bulk-export limits, rate limiting, audit trail, per-tenant isolation. Vendors who
 state their limits get believed about their strengths.
 
-#### ✅ P1.3 `pro/evaluate/licensing-and-limits.mdx`
+#### ✅ P1.3 Licensing and limits
 
 Shipped as [`pro/get-started/licensing.mdx`](pro/get-started/licensing.mdx), placed in *Get started*
 rather than a new *Evaluate* group so it is reachable before that restructure happens.
@@ -200,10 +202,10 @@ samples to the ~12 endpoints that matter (`UserCreate`, `UserGet`, `UserUpdate`,
 and add a `https://databunker.internal.example.com` server entry so the reference doesn't look like a
 localhost toy.
 
-#### P1.6 Ops pages: `high-availability.mdx`, `monitoring.mdx`, `upgrades.mdx`
+#### P1.6 Ops pages: `monitoring.mdx`, `upgrades.mdx`
 
-- **HA/scaling** — the facts already exist (stateless app tier, shared Redis, database is the bottleneck past ~12 K rec/s); turn them into a deployment topology page.
-- **Monitoring** — health endpoint, what to alert on (database CPU ≥ 70%, index cache-hit < 97%, 403 rate, audit-write failures). Zero coverage today.
+- **Monitoring** — health endpoint, what to alert on (database CPU ≥ 70%, index cache-hit < 97%, 403 rate, audit-write failures). Only the checklist covers it today; there is no page.
+- ~~HA/scaling~~ — **not needed.** Already stated in `security-overview.mdx`, `architecture.mdx`, `performance.mdx`, the FAQ, and `licensing.mdx`. A seventh restatement would be duplication.
 - **Upgrades & version support** — container tag policy, whether upgrades run schema migrations, rollback, supported-version window. Vault keeps 11 versions of docs online; there is no upgrade page here at all.
 
 #### P1.7 `changelog.mdx`
@@ -248,9 +250,9 @@ Databunker Pro / Guides
                   licensing & limits(NEW) · vs Cognito · vs Vault · vs build-your-own · FAQ
   Integrate       SDKs · framework guides(NEW) · store & retrieve PII · search (exact/fuzzy/partial) ·
                   card tokenization · files · sessions · consent & legal basis ·
-                  migrate your users table(NEW) ⭐
+                  migrations ✅
   Deploy          docker compose · helm · unattended · oracle · admin credentials ·
-                  production checklist(NEW) · HA & scaling(NEW) · backup & DR(NEW) ⭐ ·
+                  production checklist ✅ · backup & DR(NEW) ⭐ ·
                   monitoring(NEW) · upgrades(NEW)
   Operate         master key · key rotation · shamir · multi-tenancy · access control ·
                   bulk export controls · how-tos
@@ -299,7 +301,7 @@ because the plumbing already exists.
 | Wave | Contents | Why this order |
 | --- | --- | --- |
 | **1** | Hub page · Pro quickstart · all ten quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
-| **2** | Migrate-users-table · production checklist · backup & DR | The three pages that unblock an actual buying decision. |
+| **2** | ✅ Migrations · ✅ production checklist · backup & DR | The three that unblock an actual buying decision. Backup & DR remains. |
 | **3** | Security & compliance · threat model · licensing & limits · comparisons moved to *Evaluate* | Survives procurement and security review. |
 | **4** | SDK page rewrite · `x-codeSamples` · framework guides · HA/monitoring/upgrades · changelog | Makes integration and long-term ownership credible. |
 | **5** | Nav restructure · voice pass across all pages · single-sourcing · AI-integration page | Consolidation, best done once the page set is stable. |

@@ -35,7 +35,8 @@
                   "pro/installation/kubernetes-helm",
                   "pro/installation/generate-admin-credentials",
                   "pro/installation/unattended-installation",
-                  "pro/installation/oracle-database"
+                  "pro/installation/oracle-database",
+                  "pro/installation/production-checklist"
                 ]
               },
               {
