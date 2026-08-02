@@ -43,7 +43,7 @@ The token belongs on your new auth layer's user row — next to the password has
 
 ## Step 1: Export and import
 
-`ListUsers` returns at most 60 users per page and is throttled, so the export is usually the slow part — not the import. The script below pages through the pool, accumulates users into batches, and sends each batch to `UserCreateBulk`.
+`ListUsers` returns at most 60 users per page and is throttled, so the export is usually the slow part — not the import. The script runs in two phases: page through the whole pool first, then import the result in chunks of 1,000 via `UserCreateBulk`.
 
 Cognito returns attributes as a list of name/value pairs, so they are flattened first, then mapped onto the fields Databunker Pro indexes:
 
@@ -87,7 +87,7 @@ def to_profile(user):
     return profile
 
 
-def create_bulk_users(batch, errors):
+def databunkerpro_create_bulk(batch, errors):
     result = api.create_users_bulk([{"profile": p} for p in batch])
     if result.get("status") != "ok":
         raise SystemExit(f"Batch failed: {result.get('message')}")
@@ -96,24 +96,30 @@ def create_bulk_users(batch, errors):
     return len(result.get("created", [])), len(result.get("errors", []))
 
 
+def cognito_fetch_all_users():
+    """Page through the whole pool. ListUsers returns at most 60 at a time."""
+    users = []
+    for page in cognito.get_paginator("list_users").paginate(UserPoolId=POOL_ID):
+        users.extend(page["Users"])
+        print(f"exported {len(users)}", flush=True)
+    return users
+
+
 def main():
-    migrated, failed, batch = 0, 0, []
+    users = cognito_fetch_all_users()
+    total = len(users)
+    migrated, failed = 0, 0
 
     with open("cognito-errors.csv", "w", newline="") as fh:
         errors = csv.writer(fh)
         errors.writerow(["sub", "reason"])
 
-        paginator = cognito.get_paginator("list_users")
-        for page in paginator.paginate(UserPoolId=POOL_ID):
-            batch.extend(to_profile(u) for u in page["Users"])
-            if len(batch) >= CHUNK:
-                ok, bad = create_bulk_users(batch, errors)
-                migrated, failed, batch = migrated + ok, failed + bad, []
-                print(f"migrated={migrated} failed={failed}", flush=True)
-
-        if batch:
-            ok, bad = create_bulk_users(batch, errors)
+        for offset in range(0, total, CHUNK):
+            batch = [to_profile(u) for u in users[offset:offset + CHUNK]]
+            ok, bad = databunkerpro_create_bulk(batch, errors)
             migrated, failed = migrated + ok, failed + bad
+            print(f"{offset + len(batch)}/{total} migrated={migrated} failed={failed}",
+                  flush=True)
 
     print(f"\nDone. Migrated {migrated}, failed {failed}.")
     if failed:
