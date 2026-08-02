@@ -1,0 +1,69 @@
+---
+title: Production checklist
+description: What to confirm before putting Databunker Pro in front of real users — keys, database, network, access control, backup, and monitoring.
+---
+
+Work through this before go-live. Each item links to the page that explains it; this page is the list, not the explanation.
+
+## Keys and secrets
+
+- [ ] **The wrapping key is stored in a secret manager**, not in a file next to the deployment. AWS Secrets Manager, HashiCorp Vault, Google Secret Manager, or a Kubernetes secret.
+- [ ] **All five [Shamir key shares](/pro/administration/shamir-keys) are captured and distributed** to different custodians, in different systems. Three or more must never be reachable by one person.
+- [ ] **Custody is documented** — who holds which share, and how to reach them. Never record the share values themselves.
+- [ ] **A [wrapping key rotation](/pro/administration/key-rotation) has been rehearsed** on a non-production vault. It exercises the same three-share path as recovery, with no risk to data.
+- [ ] **`DATABUNKER_SETUPKEY` has been removed** from the environment. It is only needed for [unattended installation](/pro/installation/unattended-installation) and stays disabled once the vault is installed.
+
+<Warning>
+If the wrapping key is lost and fewer than three shares remain, the data cannot be decrypted — by you or by us. See [what is recoverable](/pro/administration/key-rotation#what-is-recoverable).
+</Warning>
+
+## Database
+
+- [ ] **Using a dedicated database server** — RDS, Cloud SQL, Azure Database, Oracle Cloud, or a properly managed self-hosted instance. Do not run the production database as a container alongside the application.
+- [ ] **Sized for your record count.** See the [sizing guide](/pro/get-started/performance#how-to-size-your-deployment) — storage is ~5.7 KB per record, and database vCPU is what limits write throughput at scale.
+- [ ] **TLS enforced on the database connection** (`PGSQL_SSL_MODE=require`, `ORACLE_SSL_MODE=require`, or the equivalent).
+- [ ] **On PostgreSQL, the `mtenant` and `madmin` roles exist** and are granted to the login user. These enforce [database-level tenant isolation](/pro/administration/multi-tenancy#database-level-tenant-isolation).
+- [ ] **Automated backups are enabled and retention is set** to match your recovery objective.
+- [ ] **A restore has actually been tested.** An untested backup is an assumption.
+
+## Network and TLS
+
+- [ ] **Databunker Pro is not exposed to the public internet.** It should be reachable only from your application tier.
+- [ ] **TLS terminates in front of the service** — ingress, load balancer, or service mesh.
+- [ ] **Security groups and firewall rules** restrict database access to the application subnet.
+- [ ] **The web interface is restricted** to administrators, not published alongside the API.
+
+## Access control
+
+- [ ] **The root token is not used by applications.** Issue [scoped role tokens](/pro/api/authentication) instead and keep root for administration.
+- [ ] **Roles and policies reflect least privilege** — see [access control](/pro/administration/access-control).
+- [ ] **Field-level masking is configured** so responses return only the fields each role needs.
+- [ ] **Bulk retrieval stays disabled** unless you need it. The [bulk-unlock mechanism](/pro/concepts/select-security) is default-deny by design; `list_users` should stay off unless something depends on it.
+- [ ] **Tenant tokens are used for tenant-scoped work**, so a compromised token cannot reach across tenants.
+
+## Backup and recovery
+
+- [ ] **Backups cover the database *and* the wrapping key.** Either one alone will not restore service.
+- [ ] **The licence key is recorded** somewhere you can reach during an incident.
+- [ ] **Recovery objectives are written down** — how much data you can lose, and how long a restore may take.
+- [ ] **Someone other than the person who set it up** has run through the restore procedure.
+
+## Licence and capacity
+
+- [ ] **The licence record cap covers your projected growth**, not just today's count. See [licensing and limits](/pro/get-started/licensing).
+- [ ] **Alerting on `totalnumrecords / licensemaxrecords` crossing 80%** and on `licensefinalexpiration` coming within 30 days. Both failures are silent until a write is refused.
+- [ ] **Non-production environments use their own licence keys**, so test data never consumes production capacity.
+
+## Monitoring
+
+- [ ] **Service health is polled** — `GET /status`.
+- [ ] **Database CPU alerts at 70%.** Past that point, adding application instances will not raise write throughput.
+- [ ] **Index cache-hit ratio is watched** — it stayed above 97% in every benchmark run; a sustained drop means the working set no longer fits in RAM.
+- [ ] **403 rate is monitored.** A spike means either a licence limit was reached or something is failing authorisation.
+- [ ] **Audit-write failures page someone.** The [audit trail](/pro/get-started/security-overview) is a compliance control, not just a log.
+
+## Before you switch traffic on
+
+- [ ] The deployment has run under realistic load in staging.
+- [ ] The team knows where the wrapping key lives and who holds the Shamir shares.
+- [ ] Someone is on call who has read [what is recoverable](/pro/administration/key-rotation#what-is-recoverable).
