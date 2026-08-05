@@ -16,7 +16,8 @@ docs.json                 Navigation, theme, navbar, footer. Every page must be 
 favicon.svg  logo/        Site branding.
 
 pro/                      Databunker Pro (commercial, self-hosted)
-  get-started/            Overview, PII vault, architecture, security, performance, FAQ
+  get-started/            Overview, quickstart, performance, PII vault, architecture,
+                          security, licensing, FAQ
   installation/           Docker Compose, Kubernetes/Helm, unattended, Oracle backend,
                           credentials, production checklist
   administration/         Master key, key rotation, Shamir shares, multi-tenancy, access control
@@ -66,6 +67,7 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 
 | Change | Closes |
 | ------ | ------ |
+| **[Quickstart](pro/get-started/quickstart.mdx)** — new page: one `docker run … demo` on in-memory SQLite, then create a user, store and retrieve an encrypted file. No database server, no setup wizard; ephemeral by design, so the fixed `DEMO` key cannot leak into production | Question 2 (partial) |
 | **[Licensing and limits](pro/get-started/licensing.mdx)** — new page: what the licence controls (record count and expiry, never features), what counts as a record, licence scope per deployment, behaviour at the cap and at expiry, checking usage via `SystemGetSystemStats` | Question 6 |
 | **[Wrapping key rotation](pro/administration/key-rotation.mdx)** — rewritten as a runbook: prerequisites, the `SystemGenerateWrappingKey` call, storing the returned key before restarting, verification, and a *What is recoverable* failure matrix | Half of question 5 |
 | **[Master key](pro/administration/master-key.mdx)** — documents the two independent wrappings (`encryptedkey` / `recoverykey`), which is what makes rotation O(1) in vault size and keeps Shamir shares valid across rotations | Half of question 5 |
@@ -76,8 +78,8 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 
 **Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
-root-token compromise). **The highest-value remaining gaps** are now the Pro quickstart (P0.2),
-backup and recovery (P0.5), and a changelog (P1.7).
+root-token compromise). **The highest-value remaining gaps** are now backup and recovery (P0.5), a
+changelog (P1.7) — the only thing between question 9 and a tick — and the hub page (P0.1).
 
 ### Sites benchmarked
 
@@ -100,7 +102,7 @@ backup and recovery (P0.5), and a changelog (P1.7).
 #### Five patterns all 13 share that this repo is missing
 
 1. **A hub page.** Every one of them has a landing page with a card grid. `docs.json` here has no root page — `docs.databunker.org` drops the reader straight into `pro/get-started/overview`, 59 lines of prose.
-2. **A time-boxed quickstart above the fold.** Pro has none. OSS has one (`docker run` + 3 curls). For Pro the shortest path to a first API call is: clone a repo → generate env files → `docker compose up` → tail logs for a 6-digit code → open a web UI → generate admin credentials. That's two pages and a browser detour before any code.
+2. ~~**A time-boxed quickstart above the fold.**~~ **Closed.** Pro now has [demo mode](pro/get-started/quickstart.mdx) — a single `docker run` on in-memory SQLite, no env files, no browser detour. Previously the shortest path to a first API call spanned two pages and a web UI.
 3. **Per-language code, everywhere.** Stripe/Twilio/Clerk/Supabase/Neon lead with SDK snippets and keep a language selector. Here: `CodeGroup` is used on **zero** pages, `openapi.yml` has **zero** `x-codeSamples` across 92 endpoints, and `pii-vault.mdx` hand-writes raw `axios` and `requests` calls — actively teaching readers to bypass the four SDKs that exist.
 4. **An operations story.** Vault has upgrades + sysadmin; Temporal has Production Deployment; Basis Theory has a Production Checklist. Here there is no page for backup/DR, monitoring, upgrades, or go-live hardening. Grep: `changelog` → 0 hits, `Prometheus` → 0, `upgrade` → 1 (in a comparison page), `SLA` → 0.
 5. **Proof of life.** Changelog / release notes / version selector. All 13 have at least one. This repo has none — which, for self-hosted software a CTO must commit to running, reads as *abandoned or immature*.
@@ -110,7 +112,7 @@ backup and recovery (P0.5), and a changelog (P1.7).
 | # | Question | Today | Where it stands |
 | --- | --- | --- | --- |
 | 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off `pii-vault.mdx` and `architecture.mdx`, and performance promoted to position 2. Still missing: a hub page and a Pro-vs-OSS decision page. |
-| 2 | Can my team integrate it in one sprint? | ❌ | No Pro quickstart, no framework guides, SDK page is 4 links to GitHub (32 lines, no install command, no example). |
+| 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`. Still missing: framework guides, and an SDK page that is more than 4 links to GitHub. |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) now gates go-live. Still missing: monitoring and upgrade/version-support pages. |
 | 5 | What breaks, and how badly? | ⚠️ | Key-loss failure modes and the recovery matrix are now documented (see [Done so far](#done-so-far)). Still missing: a threat model, and the other failure modes — database loss, root-token compromise. |
@@ -131,17 +133,12 @@ Card grid, no prose wall. Four cards mirroring ClickHouse: **Get started · Eval
 Below it: the three sandbox demos (user-table replacement, PCI tokenization, consent management) — today
 they appear on exactly one page. Below that: "Pro or OSS?" and the headline benchmark number.
 
-#### P0.2 `pro/get-started/quickstart.mdx` — "First token in 5 minutes"
+#### ✅ P0.2 Quickstart
 
-Non-negotiable. One page, copy-pasteable, no web-UI detour:
-
-```
-docker compose up  →  grab access code  →  create root token  →  UserCreate  →  UserGet
-```
-
-Show it in four tabs (`curl`, JS, Python, Java) using the actual SDKs. End with three "next step"
-links (search, tokenize a card, migrate your users table). Put a **"⏱ 5 minutes"** badge and a
-prerequisites `<Note>` at the top — every one of the 13 sites does this.
+Shipped as [`pro/get-started/quickstart.mdx`](pro/get-started/quickstart.mdx), and it beats the
+original proposal: instead of scripting around the compose install, **demo mode** (Databunker Pro
+0.14.23+) runs the whole vault from one `docker run` on in-memory SQLite — no env files, no access
+code, no browser. Still worth adding: `curl`/JS/Python/Java tabs using the actual SDKs.
 
 #### ✅ P0.3 Migrate an existing users table
 
@@ -245,7 +242,7 @@ home for each fact; link to it. Four copies will drift.
 
 ```
 Databunker Pro / Guides
-  Start here      overview · quickstart(NEW) · pro-vs-oss(NEW) · architecture · how it works
+  Start here      overview · quickstart ✅ · pro-vs-oss(NEW) · architecture · how it works
   Evaluate        performance ⭐ · security & compliance(NEW) · threat model(NEW) ·
                   licensing & limits(NEW) · vs Cognito · vs Vault · vs build-your-own · FAQ
   Integrate       SDKs · framework guides(NEW) · store & retrieve PII · search (exact/fuzzy/partial) ·
@@ -293,14 +290,13 @@ because the plumbing already exists.
 6. Add `⏱`/prerequisites callouts to the four install pages.
 7. ✅ Wrap the FAQ in `<Accordion>`.
 8. Fix the hardcoded white background on the architecture diagram.
-9. Delete the duplicated multi-tenancy/error tables from `openapi.yml` `info.description`, linking to `/pro/api/overview` instead.
-10. Publish a `changelog.mdx` with the last five releases.
+9. Publish a `changelog.mdx` with the last five releases.
 
 ### Suggested sequence
 
 | Wave | Contents | Why this order |
 | --- | --- | --- |
-| **1** | Hub page · Pro quickstart · all ten quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
+| **1** | Hub page · ✅ Pro quickstart · quick wins (5 of 10 done) | Fixes first impression and the 5-minute path. Cheapest, most visible. |
 | **2** | ✅ Migrations · ✅ production checklist · backup & DR | The three that unblock an actual buying decision. Backup & DR remains. |
 | **3** | Security & compliance · threat model · licensing & limits · comparisons moved to *Evaluate* | Survives procurement and security review. |
 | **4** | SDK page rewrite · `x-codeSamples` · framework guides · HA/monitoring/upgrades · changelog | Makes integration and long-term ownership credible. |

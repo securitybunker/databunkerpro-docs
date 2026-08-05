@@ -7,7 +7,8 @@ info:
     ## Key Features
     - **User Tokenization**: Create, update, and manage user profiles with privacy controls
     - **Consent Management**: Handle legal basis and user agreements for GDPR/DPDP compliance
-    - **Token Management**: Secure tokenization of sensitive data like credit cards
+    - **Format Preserving Tokenization**: Secure tokenization of sensitive data like credit cards
+    - **File Storage**: Encrypted per-user file storage backed by local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage
     - **Audit Trail**: Complete audit logging of all data access and modifications
     - **Multi-tenant**: Support for multiple tenants with isolated data
     - **Role-based Access**: Fine-grained access control with policies and roles
@@ -53,7 +54,7 @@ info:
     | Code | Meaning |
     |------|---------|
     | 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure |
-    | 403  | Access denied — missing/invalid API token, insufficient permissions, disabled feature, or license limit |
+    | 403  | Access denied — missing/invalid API token, insufficient permissions, or a disabled feature. Also returned as `Record limit reached` when the license record cap is hit (reads, updates and deletes still work) and as `License expired` when the license has lapsed (the vault is read-only) |
     | 404  | The referenced record was not found |
     | 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state |
     | 500  | Internal server error |
