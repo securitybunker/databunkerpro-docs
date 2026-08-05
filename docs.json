@@ -20,6 +20,7 @@
                 "group": "Get started",
                 "pages": [
                   "pro/get-started/overview",
+                  "pro/get-started/quickstart",
                   "pro/get-started/performance",
                   "pro/get-started/pii-vault",
                   "pro/get-started/architecture",
