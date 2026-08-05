@@ -1,0 +1,143 @@
+---
+title: Backup and recovery
+description: What to back up, how to restore, and how to export every record out of the vault — including the three artefacts a backup is useless without.
+---
+
+A Databunker Pro backup is only complete if it covers **three** artefacts. Miss any one of them and the restore fails.
+
+| Artefact | Where it lives | Without it |
+| -------- | -------------- | ---------- |
+| **Database** | PostgreSQL, MySQL, or Oracle | No records, no indexes, no audit trail |
+| **Wrapping key** | Your secret manager, and the deployment config | The vault will not start, and the data cannot be decrypted |
+| **Licence key** | The `config` table, but keep a copy outside it | The restored vault runs in Trial mode until you re-apply it |
+
+<Warning>
+A database backup on its own is worthless. Every record in it is encrypted with the master key, which is itself encrypted by the wrapping key — so a restore without the wrapping key produces a vault full of unreadable ciphertext. Back up both, and store them separately.
+</Warning>
+
+## What to back up
+
+**The database.** Use whatever your provider offers — automated RDS snapshots, Cloud SQL backups, or `pg_dump` on a schedule. Set retention to match your recovery objective. Everything is already encrypted at rest, so the backup carries no plaintext personal data.
+
+**The wrapping key.** It does not change unless you [rotate it](/pro/administration/key-rotation), so this is a one-time capture — but it must survive the loss of the environment that holds it. Keep it in a secret manager, and keep the [Shamir key shares](/pro/administration/shamir-keys) somewhere else entirely.
+
+**The licence key.** Recorded outside the database, so you can re-apply it during a restore without waiting on the portal.
+
+<Note>
+Redis holds only transient session state and does not need backing up. Sessions are lost on restore; users sign in again.
+</Note>
+
+## Restoring
+
+<Steps>
+<Step title="Restore the database">
+
+Restore the snapshot or dump into a database of the same engine. Databunker Pro does not need to be running.
+
+</Step>
+<Step title="Point a new instance at it, with the original wrapping key">
+
+Set `DATABUNKER_WRAPPINGKEY` to the same value the vault used before. The instance is stateless — nothing else carries over.
+
+```sh
+docker compose up -d
+```
+
+</Step>
+<Step title="Confirm decryption works">
+
+A successful start proves the wrapping key unwrapped the master key. Read a known record to prove the master key still decrypts the data:
+
+```bash
+curl -X POST http://localhost:3000/v2/UserGet \
+  -H "X-Bunker-Token: YOUR-ROOT-TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"known@example.com"}'
+```
+
+</Step>
+<Step title="Re-apply the licence if needed">
+
+Check `SystemGetSystemStats` — if `licensemaxrecords` reads 1,000 you are in Trial mode. See [update the licence key](/pro/howtos/update-license).
+
+</Step>
+</Steps>
+
+## Recovery objectives
+
+Two numbers to decide before you need them:
+
+- **RPO — how much data you can afford to lose.** Set by backup frequency. Daily snapshots mean up to a day of records; continuous archiving or point-in-time recovery narrows it to minutes.
+- **RTO — how long a restore may take.** Dominated by database size, not by Databunker Pro. Restoring 585 GB (roughly 100 M records at ~5.7 KB each — see [storage footprint](/pro/get-started/performance#storage-footprint)) takes far longer than starting the application container.
+
+## Test the restore
+
+An untested backup is an assumption. On a schedule, and ideally with someone who did not build the deployment:
+
+<Steps>
+<Step title="Restore into a scratch environment">
+Use a [non-production licence key](/pro/get-started/licensing#non-production-environments) so the drill does not consume production record capacity.
+</Step>
+<Step title="Bring it up with the real wrapping key">
+This is the step that catches the most common failure — a wrapping key nobody can find.
+</Step>
+<Step title="Read records back and compare">
+Spot-check a handful against known values.
+</Step>
+<Step title="Record how long it took">
+That number is your real RTO.
+</Step>
+</Steps>
+
+## Exporting every record
+
+Databunker Pro [deliberately blocks bulk retrieval](/pro/concepts/select-security) so a stolen token cannot dump the vault. A legitimate full export therefore goes through a specific, audited path rather than a `SELECT *`.
+
+`BulkListAllUsers` pages through every record. It requires the `list_users` configuration flag, a main-tenant admin token, and a short-lived unlock UUID obtained immediately beforehand — and every call is written to the audit trail.
+
+```python
+import json, os
+from databunkerpro import DatabunkerproAPI
+
+PAGE = 1000
+api = DatabunkerproAPI(
+    os.environ["DATABUNKER_API_URL"],
+    os.environ["DATABUNKER_API_TOKEN"],
+    os.getenv("DATABUNKER_TENANT_NAME", ""),
+)
+
+with open("vault-export.jsonl", "w") as out:
+    offset, exported = 0, 0
+    while True:
+        # The unlock UUID is short-lived, so take a fresh one for each page.
+        unlock = api.bulk_list_unlock()["unlockuuid"]
+        result = api.bulk_list_all_users(unlock, offset=offset, limit=PAGE)
+        rows = result.get("rows") or []
+        if not rows:
+            break
+        for row in rows:
+            out.write(json.dumps(row) + "\n")
+        exported += len(rows)
+        offset += PAGE
+        print(f"exported {exported}/{result.get('total')}", flush=True)
+
+print(f"Done. {exported} records written to vault-export.jsonl")
+```
+
+<Warning>
+The output is **decrypted personal data in plaintext** — the one artefact in this guide that is not protected by the vault. Write it to encrypted storage, restrict who can read it, and delete it when the migration or portability request it was created for is complete.
+</Warning>
+
+Format-preserving tokens export separately via `BulkListTokens`, and audit events via `BulkListAllAuditEvents`.
+
+## What is not recoverable
+
+Backups protect against losing the database. They do not protect against losing your keys.
+
+If the wrapping key is gone **and** fewer than three Shamir shares remain, the data cannot be decrypted — not by you, and not by Databunker. There is no escrow and no vendor copy of your keys, which is the same property that means a breach of our systems cannot expose your data. See [what is recoverable](/pro/administration/key-rotation#what-is-recoverable) for the full matrix.
+
+## Next steps
+
+- [Wrapping key rotation](/pro/administration/key-rotation) — the recovery matrix and the rotation runbook
+- [Shamir key shares](/pro/administration/shamir-keys) — custody and the three-share threshold
+- [Production checklist](/pro/installation/production-checklist) — the go-live gate that includes these items

@@ -108,7 +108,7 @@ Your five Shamir shares remain valid after rotation and do **not** need to be re
 | Wrapping key lost, instance **already stopped**, three or more shares | The vault cannot start without a wrapping key. [Contact support](mailto:office@databunkertech.com) and have your shares available. |
 | Wrapping key lost, **fewer than three shares** | **Unrecoverable.** The encrypted data cannot be decrypted — not by you, and not by Databunker support. There is no vendor backdoor. |
 | Shares lost or reduced below three, wrapping key intact | The vault keeps running normally, but you have lost your recovery margin and can no longer rotate. [Contact support](mailto:office@databunkertech.com) while the wrapping key is still intact — this is fixable, but treat it as an incident rather than a housekeeping task. |
-| Database lost | The wrapping key alone cannot reconstruct data. Restore the database from backup — backups must cover the database **and** the wrapping key. |
+| Database lost | The wrapping key alone cannot reconstruct data. Restore from backup — see [backup and recovery](/pro/administration/backup-and-recovery). |
 
 <Warning>
 **Three shares is a hard floor.** Below it, a lost wrapping key means permanent loss of every record in the vault. This is a property of the design, not a support limitation: Databunker Pro holds no copy of your keys and no escrow, which is precisely why a breach of our systems cannot expose your data. Audit the location and availability of all five shares on a schedule, and verify you can still reach three of them.
