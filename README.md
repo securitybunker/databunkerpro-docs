@@ -20,7 +20,8 @@ pro/                      Databunker Pro (commercial, self-hosted)
                           security, licensing, FAQ
   installation/           Docker Compose, Kubernetes/Helm, unattended, Oracle backend,
                           credentials, production checklist
-  administration/         Master key, key rotation, Shamir shares, multi-tenancy, access control
+  administration/         Master key, key rotation, Shamir shares, backup & recovery,
+                          multi-tenancy, access control
   concepts/               Tokenization, file vault, search, versioning, sub-accounts, deployment
   comparisons/            vs AWS Cognito, vs HashiCorp Vault, vs building it yourself
   migrations/             Moving existing users in: SQL users table, AWS Cognito
@@ -75,11 +76,12 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Database-level tenant isolation](pro/administration/multi-tenancy.mdx)** — the PostgreSQL `mtenant` / `madmin` role model, RLS policies, covered tables, why `xtokens` is excluded, and how the cross-tenant bypass is constrained | Question 7 (partial) |
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
 | **[Production checklist](pro/installation/production-checklist.mdx)** — new page: a go-live gate covering keys, database, network, access control, backup, licence capacity, and monitoring, linking out to the deep pages | Question 4 (partial) |
+| **[Backup and recovery](pro/administration/backup-and-recovery.mdx)** — new page: the three artefacts a backup needs (database + wrapping key + licence), restore runbook, RPO/RTO, a restore drill, and the sanctioned `BulkListAllUsers` export path | Question 5, question 8 (out) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 
-**Still open on question 5:** the threat model, and the failure modes beyond key loss (database loss,
-root-token compromise). **The highest-value remaining gaps** are now backup and recovery (P0.5), a
-changelog (P1.7) — the only thing between question 9 and a tick — and the hub page (P0.1).
+**All five Priority 0 pages are shipped except the hub page (P0.1).** The highest-value remaining
+gaps are a changelog (P1.7) — the only thing between question 9 and a tick — the hub page, and the
+threat model (P1.2).
 
 ### Sites benchmarked
 
@@ -115,10 +117,10 @@ changelog (P1.7) — the only thing between question 9 and a tick — and the hu
 | 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`. Still missing: framework guides, and an SDK page that is more than 4 links to GitHub. |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) now gates go-live. Still missing: monitoring and upgrade/version-support pages. |
-| 5 | What breaks, and how badly? | ⚠️ | Key-loss failure modes and the recovery matrix are now documented (see [Done so far](#done-so-far)). Still missing: a threat model, and the other failure modes — database loss, root-token compromise. |
+| 5 | What breaks, and how badly? | ⚠️ | Key loss, database loss, and recovery are documented. Still missing: a threat model, and root-token compromise. |
 | 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
 | 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
-| 8 | Migration path in (and out)? | ⚠️ | A [Migrations](pro/migrations/overview.mdx) group covers moving in from a [SQL users table](pro/migrations/sql-users-table.mdx) or [AWS Cognito](pro/migrations/aws-cognito.mdx). Still missing: the sanctioned bulk-export path for getting data *out*. |
+| 8 | Migration path in (and out)? | ✅ | [Migrations](pro/migrations/overview.mdx) covers moving in from a [SQL users table](pro/migrations/sql-users-table.mdx) or [AWS Cognito](pro/migrations/aws-cognito.mdx); [backup and recovery](pro/administration/backup-and-recovery.mdx) documents the audited export path out. |
 | 9 | Is the project alive? | ❌ | No changelog, no releases, no version support policy. |
 | 10 | How does it compare to alternatives? | ✅ | Three comparison pages exist (Cognito, Vault, build-your-own). Good — but filed under *Guides*, where an evaluator won't look. |
 
@@ -152,14 +154,11 @@ Shipped as [`pro/installation/production-checklist.mdx`](pro/installation/produc
 placed in *Installation* rather than a new *Deploy* group, since it is a one-time go-live gate rather
 than an ongoing operational task.
 
-#### P0.5 `pro/installation/backup-and-recovery.mdx`
+#### ✅ P0.5 Backup and recovery
 
-For a vault, this is the fear that kills deals. State plainly:
-
-- What must be backed up: database **+ wrapping key + licence** (all three, or the backup is useless)
-- **If the wrapping key is lost, the data is unrecoverable.** Say it in bold. Then point at Shamir 3-of-5.
-- Restore runbook, RPO/RTO guidance, a "test your restore" drill
-- **The sanctioned full-export path.** `select-security` deliberately blocks bulk extraction — so document how a *legitimate* exit/portability export is performed. "Can I get my data out if I stop paying?" is existential for a vault and is currently unanswered.
+Shipped as [`pro/administration/backup-and-recovery.mdx`](pro/administration/backup-and-recovery.mdx) —
+placed in *Administration* beside key rotation and Shamir shares, since it is recurring operational
+work read during an incident, not a one-time install step.
 
 ### Priority 1 — evaluation and integration surface
 
@@ -249,10 +248,9 @@ Databunker Pro / Guides
                   card tokenization · files · sessions · consent & legal basis ·
                   migrations ✅
   Deploy          docker compose · helm · unattended · oracle · admin credentials ·
-                  production checklist ✅ · backup & DR(NEW) ⭐ ·
-                  monitoring(NEW) · upgrades(NEW)
-  Operate         master key · key rotation · shamir · multi-tenancy · access control ·
-                  bulk export controls · how-tos
+                  production checklist ✅ · monitoring(NEW) · upgrades(NEW)
+  Operate         master key · key rotation · shamir · backup & DR ✅ · multi-tenancy ·
+                  access control · bulk export controls · how-tos
   Changelog(NEW)
 ```
 
@@ -297,7 +295,7 @@ because the plumbing already exists.
 | Wave | Contents | Why this order |
 | --- | --- | --- |
 | **1** | Hub page · ✅ Pro quickstart · quick wins (5 of 10 done) | Fixes first impression and the 5-minute path. Cheapest, most visible. |
-| **2** | ✅ Migrations · ✅ production checklist · backup & DR | The three that unblock an actual buying decision. Backup & DR remains. |
+| **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | The three that unblock an actual buying decision. |
 | **3** | Security & compliance · threat model · licensing & limits · comparisons moved to *Evaluate* | Survives procurement and security review. |
 | **4** | SDK page rewrite · `x-codeSamples` · framework guides · HA/monitoring/upgrades · changelog | Makes integration and long-term ownership credible. |
 | **5** | Nav restructure · voice pass across all pages · single-sourcing · AI-integration page | Consolidation, best done once the page set is stable. |
