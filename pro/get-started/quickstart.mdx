@@ -1,0 +1,260 @@
+---
+title: Quickstart
+sidebarTitle: Quickstart
+description: Run Databunker Pro locally in demo mode with a single Docker command, then create a user record and store an encrypted file through the API.
+---
+
+Demo mode starts a complete Databunker Pro instance with no database server, no configuration, and no setup wizard. It installs itself on an in-memory SQLite database and comes up ready to accept API calls, which makes it the fastest way to evaluate the API.
+
+<Warning>
+Demo mode is for evaluation only. The database is held in memory and everything is erased when the container stops, the wrapping key is a fixed public value, and the root access token is the well-known string `DEMO`. Never expose a demo instance to a network you do not control, and never use it for real personal data. For a real deployment, see [Install with Docker Compose](/pro/installation/docker-compose).
+</Warning>
+
+## Step 1: Start Databunker Pro
+
+```bash
+docker run -p 3000:3000 -d --rm --name databunkerpro securitybunker/databunkerpro demo
+```
+
+The container installs itself on first start. Check the logs to confirm it is ready:
+
+```bash
+docker logs databunkerpro
+```
+
+```
+ Databunker Pro demo is ready
+  Web UI:            http://localhost:3000/
+  Root access token: DEMO
+  Database:          in-memory, erased on restart
+```
+
+Open [http://localhost:3000/](http://localhost:3000/) to reach the web interface. Select **Admin** as the login method and enter `DEMO` as the access token.
+
+<Note>
+Demo mode requires Databunker Pro **0.14.23** or later. Every API call below authenticates with the `X-Bunker-Token: DEMO` header — in a real deployment this is your root access token, generated during [setup](/pro/installation/generate-admin-credentials).
+</Note>
+
+## Step 2: Create a user record
+
+Storing a user record is the most common Databunker Pro operation. The vault encrypts the profile and returns a **user token** in UUID format.
+
+```bash
+curl -X POST http://localhost:3000/v2/UserCreate \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"profile":{"email":"john@example.com","name":"John Doe","phone":"+15551234567"}}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "ab88ca3e-599f-8f17-10dd-c7f424504b94"
+}
+```
+
+That token is a pseudonymized identity. Store it in your own database in place of the personal data — on its own it reveals nothing, and deleting the user record in Databunker Pro renders the encrypted data unrecoverable.
+
+You can read the record back by user token, or by any indexed field such as `email`, `phone`, or `login`:
+
+```bash
+curl -X POST http://localhost:3000/v2/UserGet \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"john@example.com"}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "ab88ca3e-599f-8f17-10dd-c7f424504b94",
+  "profile": {
+    "email": "john@example.com",
+    "name": "John Doe",
+    "phone": "+15551234567"
+  },
+  "version": 1
+}
+```
+
+The `mode` and `identity` pair identifies the user in every call that follows. Supported modes are `token`, `login`, `email`, `phone`, and `custom`.
+
+## Step 3: Store an encrypted file
+
+Files are attached to a user and encrypted with a per-file key that is wrapped by that user's record key. File content is supplied as base64 in the `filedata` field.
+
+The optional `tags` field labels the file by document type, so you can find it later without relying on the filename:
+
+```bash
+FILEDATA=$(base64 -i passport.jpg | tr -d '\n')
+
+curl -X POST http://localhost:3000/v2/FileCreate \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"email\",\"identity\":\"john@example.com\",
+       \"filename\":\"passport.jpg\",\"filedata\":\"$FILEDATA\",
+       \"tags\":[\"passport\",\"kyc\"]}"
+```
+
+```json
+{
+  "status": "ok",
+  "token": "d328ce46-7f2e-3a8e-bd4d-db1dc282dc87",
+  "fileuuid": "dc42ae8d-0789-ea5a-f29b-1dbcac0fe321",
+  "duplicate": false,
+  "tags": ["kyc", "passport"]
+}
+```
+
+The `fileuuid` is the handle for this file. The MIME type was not supplied — Databunker Pro detects it from the file content and stores it, so `image/jpeg` appears in the responses below. Pass `mimetype` explicitly only when you need to override that.
+
+Tags are lowercased, de-duplicated, and sorted on write, which is why they come back in a different order than they were sent.
+
+<Note>
+File tagging requires Databunker Pro **0.14.24** or later. Tags must match `^[a-z0-9][a-z0-9._-]{0,49}$`, and a file can carry up to 16 of them. Because tags are stored unencrypted so they can be indexed, use them for document types such as `passport` or `proof-of-address` — never for personal data.
+</Note>
+
+Upload a second file so the next steps have something to filter:
+
+```bash
+curl -X POST http://localhost:3000/v2/FileCreate \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"email\",\"identity\":\"john@example.com\",
+       \"filename\":\"bill.pdf\",
+       \"filedata\":\"$(base64 -i bill.pdf | tr -d '\n')\",
+       \"tags\":[\"proof-of-address\",\"kyc\"]}"
+```
+
+<Tip>
+Uploading the same content twice for the same user does not create a second copy. The response returns the existing `fileuuid` with `"duplicate": true`.
+</Tip>
+
+## Step 4: List the user's files
+
+```bash
+curl -X POST http://localhost:3000/v2/FileListUserFiles \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"john@example.com"}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "d328ce46-7f2e-3a8e-bd4d-db1dc282dc87",
+  "files": [
+    {
+      "fileuuid": "dc42ae8d-0789-ea5a-f29b-1dbcac0fe321",
+      "filename": "passport.jpg",
+      "mimetype": "image/jpeg",
+      "size": 24,
+      "tags": ["kyc", "passport"],
+      "doublehash": "8504e89336b0c924aeb1907b5fe906319cfc7b0c859eafc0c129a93e93c4b37d",
+      "creationtime": 1785906460
+    },
+    {
+      "fileuuid": "8325231e-3ac3-3444-706f-f0b4ccd64169",
+      "filename": "bill.pdf",
+      "mimetype": "application/pdf",
+      "size": 18,
+      "tags": ["kyc", "proof-of-address"],
+      "doublehash": "b1dc75a124dd909e2523325db46f381a37fa7993d7de1c8427b833f76c133a4f",
+      "creationtime": 1785906460
+    }
+  ]
+}
+```
+
+This returns metadata only. Filenames are encrypted at rest and decrypted for the response, so the listing itself never exposes file content.
+
+Add a `tag` to return just the files carrying it — useful for checking which documents a profile is still missing:
+
+```bash
+curl -X POST http://localhost:3000/v2/FileListUserFiles \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"john@example.com","tag":"proof-of-address"}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "d328ce46-7f2e-3a8e-bd4d-db1dc282dc87",
+  "files": [
+    {
+      "fileuuid": "8325231e-3ac3-3444-706f-f0b4ccd64169",
+      "filename": "bill.pdf",
+      "mimetype": "application/pdf",
+      "size": 18,
+      "tags": ["kyc", "proof-of-address"],
+      "doublehash": "b1dc75a124dd909e2523325db46f381a37fa7993d7de1c8427b833f76c133a4f",
+      "creationtime": 1785906460
+    }
+  ]
+}
+```
+
+## Step 5: Retrieve a file
+
+Retrieve a file by its `fileuuid`, taken from the `FileCreate` response or from the listing above. The decrypted content comes back base64-encoded in `filedata`:
+
+```bash
+curl -X POST http://localhost:3000/v2/FileGet \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"john@example.com",
+       "fileuuid":"dc42ae8d-0789-ea5a-f29b-1dbcac0fe321"}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "d328ce46-7f2e-3a8e-bd4d-db1dc282dc87",
+  "fileuuid": "dc42ae8d-0789-ea5a-f29b-1dbcac0fe321",
+  "filename": "passport.jpg",
+  "mimetype": "image/jpeg",
+  "size": 24,
+  "tags": ["kyc", "passport"],
+  "filedata": "ZmFrZSBwYXNzcG9ydCBzY2FuIGJ5dGVz"
+}
+```
+
+To download the decrypted bytes directly instead of base64 inside JSON, add `"raw": true`. The response carries the original MIME type and a `Content-Disposition` header:
+
+```bash
+curl -X POST http://localhost:3000/v2/FileGet \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"john@example.com",
+       "fileuuid":"dc42ae8d-0789-ea5a-f29b-1dbcac0fe321","raw":true}' \
+  -o passport-downloaded.jpg
+```
+
+## Step 6: Stop the instance
+
+```bash
+docker stop databunkerpro
+```
+
+The container was started with `--rm`, so it is removed on stop and the in-memory database goes with it. Starting demo mode again gives you a clean instance.
+
+## Next steps
+
+<Columns cols={2}>
+<Card title="Install with Docker Compose" href="/pro/installation/docker-compose">
+Deploy with a real database, persistent storage, and generated credentials.
+</Card>
+
+<Card title="File Vault" href="/pro/concepts/file-vault">
+How file encryption, crypto-shredding, and the S3, GCS, and Azure backends work.
+</Card>
+
+<Card title="Access control" href="/pro/administration/access-control">
+Scope API tokens to roles and groups instead of using the root token.
+</Card>
+
+<Card title="API reference" href="/pro/api/overview">
+The full API surface, authentication, errors, and pagination.
+</Card>
+</Columns>
