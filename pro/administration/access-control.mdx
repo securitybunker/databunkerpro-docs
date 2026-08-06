@@ -115,8 +115,8 @@ This policy allows a `security-analyst` role to read full user records **only** 
   "Resource": ["*.profile"],
   "Condition": {
     "StringEquals": {
-      "${request_metadata.purpose}":     "fraud-investigation",
-      "${request_metadata.environment}": "production"
+      "${request_metadata:purpose}":     "fraud-investigation",
+      "${request_metadata:environment}": "production"
     }
   }
 }
