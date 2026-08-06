@@ -106,7 +106,7 @@ threat model (P1.2).
 1. **A hub page.** Every one of them has a landing page with a card grid. `docs.json` here has no root page — `docs.databunker.org` drops the reader straight into `pro/get-started/overview`, 59 lines of prose.
 2. ~~**A time-boxed quickstart above the fold.**~~ **Closed.** Pro now has [demo mode](pro/get-started/quickstart.mdx) — a single `docker run` on in-memory SQLite, no env files, no browser detour. Previously the shortest path to a first API call spanned two pages and a web UI.
 3. **Per-language code, everywhere.** Stripe/Twilio/Clerk/Supabase/Neon lead with SDK snippets and keep a language selector. Here: `CodeGroup` is used on **zero** pages, `openapi.yml` has **zero** `x-codeSamples` across 92 endpoints, and `pii-vault.mdx` hand-writes raw `axios` and `requests` calls — actively teaching readers to bypass the four SDKs that exist.
-4. **An operations story.** Vault has upgrades + sysadmin; Temporal has Production Deployment; Basis Theory has a Production Checklist. Here there is no page for backup/DR, monitoring, upgrades, or go-live hardening. Grep: `changelog` → 0 hits, `Prometheus` → 0, `upgrade` → 1 (in a comparison page), `SLA` → 0.
+4. **An operations story.** Partly closed — there is now a [production checklist](pro/installation/production-checklist.mdx) and a [backup and recovery](pro/administration/backup-and-recovery.mdx) page. Still missing what Vault and Temporal both have: **monitoring** and **upgrades / version support**.
 5. **Proof of life.** Changelog / release notes / version selector. All 13 have at least one. This repo has none — which, for self-hosted software a CTO must commit to running, reads as *abandoned or immature*.
 
 ### Score against the ten questions a CTO asks
@@ -164,11 +164,46 @@ work read during an incident, not a one-time install step.
 
 #### P1.1 Promote the buried gold: `pro/get-started/security-compliance.mdx`
 
-Lift FAQ answers 6–8 into a real page: framework-by-framework control mapping (GDPR Art. 25/32,
-PCI DSS scope reduction via tokenization, HIPAA §164.312, DPDPA, RBI localisation, ISO 27001, SOC 2),
-the FIPS 140-2 detail, current attestation status, and the IRAP boundary-inheritance argument.
-**Keep the MD5 disclosure.** That kind of candour is what makes a security reviewer trust the rest
-of the document — it is a feature, not a liability, and right now it's hidden in a Q&A.
+The material already exists — framework list, inherited-certification argument, SOC 2 status, the
+IRAP boundary-inheritance argument — but it is inside two FAQ accordions, where no security reviewer
+will find it. Lift it into a page, placed next to `security-overview.mdx`.
+
+**The split that keeps the two pages from duplicating each other:** `security-overview.mdx` explains
+*how the product works* (AES-256, RLS, the key model) for an engineer. `security-compliance.mdx` maps
+those mechanisms onto *what a framework requires* and states attestation status, for a reviewer. The
+new page never re-explains a mechanism; it links.
+
+Proposed shape:
+
+1. **Databunker Pro is a control, not a certificate.** Say it up front — it provides technical
+   controls frameworks require; it does not make you compliant. Vendors who blur this get caught.
+2. **A shared responsibility table** — the centrepiece, because it answers the question behind every
+   one of those FAQ answers and nothing states it directly today:
+
+   | | Databunker Pro | Your cloud | You |
+   | --- | --- | --- | --- |
+   | Encryption at rest | AES-256 per record | disk encryption | key custody |
+   | Tenant isolation | PostgreSQL RLS | — | tenant design |
+   | Audit trail | per-record, per-field | — | retention, review |
+   | Physical / infra controls | — | SOC 2 · ISO · IRAP | — |
+   | Organisational controls | — | — | your own SOC 2 / ISO |
+
+3. **Attestation status**, honestly tabulated: SOC 2 (in progress, managed portal only), ISO 27001
+   (roadmapped), IRAP (not assessed — boundary inheritance), FIPS 140-2 (algorithms compliant).
+4. **Framework control mapping** — GDPR Art. 25/32, PCI DSS scope reduction via tokenization,
+   HIPAA §164.312, DPDPA, RBI localisation. Each row: requirement → feature → link.
+5. **What to hand an auditor** — which pages are evidence, and what the audit trail can produce.
+
+**Keep the MD5 disclosure.** That candour is what makes a reviewer trust the rest of the document.
+
+**Two blockers before writing.** *(a)* The FAQ says SOC 2 is "expected within ~2–3 months", written
+around July 2026 — that window has closed, and a stale forward-looking date is worse than none on a
+page auditors read. Confirm current status first. *(b)* FERPA appears in one FAQ list and nowhere
+else; either it belongs in the mapping or it should be dropped rather than carried forward as an
+unsupported claim.
+
+Give this page a **`last reviewed` date** in frontmatter — compliance is the one area where readers
+need to know how current the claim is.
 
 #### P1.2 `pro/get-started/threat-model.mdx` — including what Databunker does *not* protect
 
@@ -192,11 +227,10 @@ the OSS quickstart.
 
 #### P1.5 Add `x-codeSamples` to the OpenAPI spec
 
-92 endpoints, zero code samples, and `servers:` lists only `http://localhost:3000`. Add JS/Python/PHP/Java
-samples to the ~12 endpoints that matter (`UserCreate`, `UserGet`, `UserUpdate`, `UserDelete`,
-`UserCreateBulk`, format-preserving token create/get, `AppdataCreate`, agreement accept, session create),
-and add a `https://databunker.internal.example.com` server entry so the reference doesn't look like a
-localhost toy.
+92 endpoints, still zero code samples. Add JS/Python/PHP/Java samples to the ~12 endpoints that matter
+(`UserCreate`, `UserGet`, `UserUpdate`, `UserDelete`, `UserCreateBulk`, format-preserving token
+create/get, `AppdataCreate`, agreement accept, session create). The `servers:` half of this item is
+done — a non-localhost entry is now listed first.
 
 #### P1.6 Ops pages: `monitoring.mdx`, `upgrades.mdx`
 
@@ -219,54 +253,28 @@ The repo contains two distinct registers, and the wrong one is on the entry page
 concedes weaknesses ("Oracle writes ~2.4× slower", "~3× the on-disk size"), and marks projections
 as projections. A CTO reading that page trusts the product. Apply it everywhere.
 
-**Delete the other register.** Concretely:
-
-- `pii-vault.mdx` opens *"In today's data-driven world…"*; `architecture.mdx`'s description opens *"In today's digital landscape…"*. Cut both — open with what the thing does.
-- Drop the closing sales blocks: *"Why Choose Databunker Pro?"*, *"🎯 Conclusion"*, *"The Bottom Line"*, *"Ready to eliminate PII exposure…"*. Mid-document CTAs signal vendor content. Replace with a "Next steps" link list, and put a single "get a trial key / talk to an engineer" card at the end of *evaluation* pages only.
-- Remove emoji headings (`🔐 ⚠️ ⚙️ 💻 🛡️ 🎯`, `💣`, `🚀`). None of the 13 reference sites uses them in headings.
-- Cut unfalsifiable adjectives — "enterprise-grade", "next-generation", "robust", "business imperative".
-
-#### Single-source the duplicated facts
-
-"AES-256 / RLS multi-tenancy / Shamir / stateless" is restated in `architecture.mdx`,
-`security-overview.mdx`, `faq.mdx`, and `pii-vault.mdx`. The multi-tenancy + error-code tables are
-duplicated verbatim between `pro/api/overview.mdx` and `openapi.yml`'s `info.description`. Pick one
-home for each fact; link to it. Four copies will drift.
-
 #### Restructure the navigation
 
-`Concepts` is currently a flat nine-item list mixing search features (fuzzy, partial), data model
-(versioning, shared records, sub-accounts), security (select-security), and deployment
-(global-deployment). Regroup by reader intent:
+The wholesale *Evaluate / Integrate / Deploy / Operate* regroup originally sketched here has been
+overtaken: pages have since been placed into the existing groups deliberately — production checklist
+into *Installation* (a one-time gate), backup & recovery into *Administration* (recurring work),
+licensing into *Get started* (read before buying), and migrations into their own group. Those
+decisions are recorded on the P-items above and should not be undone by a blanket restructure.
 
-```
-Databunker Pro / Guides
-  Start here      overview · quickstart ✅ · pro-vs-oss(NEW) · architecture · how it works
-  Evaluate        performance ⭐ · security & compliance(NEW) · threat model(NEW) ·
-                  licensing & limits(NEW) · vs Cognito · vs Vault · vs build-your-own · FAQ
-  Integrate       SDKs · framework guides(NEW) · store & retrieve PII · search (exact/fuzzy/partial) ·
-                  card tokenization · files · sessions · consent & legal basis ·
-                  migrations ✅
-  Deploy          docker compose · helm · unattended · oracle · admin credentials ·
-                  production checklist ✅ · monitoring(NEW) · upgrades(NEW)
-  Operate         master key · key rotation · shamir · backup & DR ✅ · multi-tenancy ·
-                  access control · bulk export controls · how-tos
-  Changelog(NEW)
-```
+What is still worth doing:
 
-Three specific moves: **comparisons out of Guides into Evaluate** (evaluators don't browse guides);
-**performance to position 2 in Start here** (it's the strongest asset — lead with it); and collapse
-the single-page `developer-tools` group into `Integrate`.
-
-Also add a **"Pro or OSS?"** page. With two Mintlify `products`, a reader who lands on Pro never
-learns OSS exists, and vice versa. OSS is the top of the funnel — give it an explicit upgrade path page.
+- **`Concepts` is a flat nine-item list** mixing search features (fuzzy, partial), data model
+  (versioning, shared records, sub-accounts), security (select-security), and deployment
+  (global-deployment). Split it by reader intent.
+- **Move the comparisons out of *Guides*.** Evaluators do not browse a guides list.
+- **Collapse the single-page `developer-tools` group** once the SDK page (P1.4) is written.
+- **Add a "Pro or OSS?" page.** With two Mintlify `products`, a reader who lands on Pro never learns
+  OSS exists, and vice versa. OSS is the top of the funnel — give it an explicit upgrade path.
 
 #### Visual and mechanical
 
 - `architecture.mdx` sets `style={{ backgroundColor: '#FFF' }}` on the diagram — that breaks in dark mode. Export diagrams with transparent backgrounds and wrap them in `<Frame>`.
 - Add `icon:` frontmatter to group landing pages; Mintlify renders them in the sidebar and it reads as a maintained site.
-- Convert the FAQ's 18 answers to `<Accordion>` — it's currently an unscannable wall.
-- Add `⏱ time` + prerequisites callouts to every install page (only some have them).
 - Consider a docs-wide `<Tabs>`/`<CodeGroup>` language convention so a reader who picks Python once sees Python throughout.
 
 #### AI/agent surface — already ahead, finish the job
@@ -280,7 +288,7 @@ because the plumbing already exists.
 
 ### Quick wins (under an hour each)
 
-1. Add `index.mdx` hub with a card grid.
+1. Add `index.mdx` hub with a card grid — see P0.1.
 2. ✅ Move `performance` to position 2 under *Get started*.
 3. ✅ Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers from `pii-vault.mdx` and `architecture.mdx`.
 4. ⚠️ Remove emoji from all headings — all 9 removed; `access-control.mdx` still has `## Why Choose CRBAC?`, and body ✅/❌ markers were kept.
@@ -294,11 +302,11 @@ because the plumbing already exists.
 
 | Wave | Contents | Why this order |
 | --- | --- | --- |
-| **1** | Hub page · ✅ Pro quickstart · quick wins (5 of 10 done) | Fixes first impression and the 5-minute path. Cheapest, most visible. |
-| **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | The three that unblock an actual buying decision. |
-| **3** | Security & compliance · threat model · licensing & limits · comparisons moved to *Evaluate* | Survives procurement and security review. |
-| **4** | SDK page rewrite · `x-codeSamples` · framework guides · HA/monitoring/upgrades · changelog | Makes integration and long-term ownership credible. |
-| **5** | Nav restructure · voice pass across all pages · single-sourcing · AI-integration page | Consolidation, best done once the page set is stable. |
+| **1** | Hub page · ✅ quickstart · remaining quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
+| **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | **Done.** The three that unblock a buying decision. |
+| **3** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
+| **4** | SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · monitoring + upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
+| **5** | `Concepts` split · voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
 
 **Summary:** the docs are already excellent at the hard technical question (`performance.mdx` beats
 every competitor site examined) and near-silent on the five commercial ones — *how do I get in, how do

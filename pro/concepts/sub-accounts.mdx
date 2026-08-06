@@ -463,19 +463,19 @@ const resellerTenant = await rootClient.tenantCreate({
 4. **Monitoring**: Monitor sub-account activity for security and compliance
 5. **Documentation**: Document which approach is used for each sub-account
 
-## Conclusion
+## Choosing between them
 
-Databunker Pro provides two powerful approaches for implementing sub-accounts:
+| | Multi-tenancy | Groups with CRBAC |
+| --- | --- | --- |
+| Isolation | Enforced by the database (PostgreSQL RLS) | Enforced by policy evaluation |
+| Administration | Each tenant administered independently | Central administration |
+| Best for | Separate customers or jurisdictions | Hierarchy and roles inside one customer |
 
-- **Multi-tenancy** offers complete isolation and independent administration
-- **Groups with CRBAC** provides flexible, role-based access control
+The two combine: multi-tenancy for the database-level boundary, groups for fine-grained permissions within it.
 
-Both approaches enable organizations to create secure, scalable sub-account structures that meet their specific requirements for data isolation, administrative control, and compliance.
+## Next steps
 
-**The approaches can be combined together** to create an even more flexible solution that leverages database-level isolation from multi-tenancy and fine-grained access control from groups.
-
-Choose the approach that best fits your use case:
-- Use **multi-tenancy** for complete isolation and independent administration
-- Use **groups** for flexible role-based access control and hierarchical structures
-- **Combine both approaches** for maximum flexibility with database-level isolation and fine-grained permissions
+- [Multi-tenancy](/pro/administration/multi-tenancy) — tenant API and database-level isolation
+- [Access control](/pro/administration/access-control) — policies, roles, and field masking
+- [Multi-jurisdiction deployment](/pro/concepts/global-deployment) — when a separate instance beats a separate tenant
 
