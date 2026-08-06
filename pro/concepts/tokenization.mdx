@@ -164,3 +164,9 @@ Format-preserving tokenization addresses three concerns at once:
 | **Privacy & compliance** | Supports GDPR data minimization and reduces PCI DSS scope — real card numbers never reach your application databases, logs, or analytics systems. |
 | **Legacy compatibility** | Tokens keep the original format and validation rules (e.g. the Luhn check for cards), so they drop into existing schemas, validators, and downstream systems without changes. |
 | **Scale** | Data partitioning and bulk endpoints handle millions of records at high throughput. |
+
+## Next steps
+
+- [PII vault](/pro/get-started/pii-vault) — tokenizing a whole user record rather than a single value
+- [Access control](/pro/administration/access-control) — restricting who can detokenize, and which fields come back
+- [Licensing and limits](/pro/get-started/licensing#what-counts-as-a-record) — a standalone token counts as one record

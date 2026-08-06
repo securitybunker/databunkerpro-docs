@@ -208,22 +208,15 @@ if (r.profile.age !== undefined) {
 }
 ```
 
-## Why Choose CRBAC?
+## How CRBAC differs from plain RBAC
 
-1. **Compliance-Ready:** CRBAC ensures organizations meet legal and regulatory requirements, including FERPA and DPDPA.
-1. **Dynamic Access Control:** Unlike static RBAC, CRBAC adapts access rights based on real-time conditions.
-1. **Fine-Grained Permissions:** Allows precise control over PII data access, reducing the risk of unauthorized exposure.
+Static RBAC answers "which endpoints may this role call?". CRBAC additionally evaluates the request itself, so the same role can be allowed or refused depending on runtime context passed in `request_metadata`, and the response can be masked field by field rather than allowed or denied whole.
 
-## Implementing CRBAC with Databunker Pro
+That is what makes it usable for regulated data: a support agent can hold one role and still see different fields depending on which record they are looking at, without you minting a role per situation.
 
-Databunker Pro simplifies CRBAC implementation by providing:
+## Next steps
 
-1. Built-in support for conditional access policies
-1. Secure PII storage with compliance enforcement
-1. A developer-friendly API for managing role-based conditions
-
-By leveraging **Databunker Pro**, organizations can seamlessly enforce FERPA-compliant data access policies while maintaining flexibility for other regulatory frameworks.
-
-## Conclusion
-
-Conditional Role-Based Access Control (CRBAC) is essential for organizations handling sensitive PII under strict compliance regulations. With Databunker Pro, businesses can implement secure, scalable, and regulation-compliant access control mechanisms tailored to their needs.
+- [Multi-tenancy](/pro/administration/multi-tenancy) — the database-level boundary policies operate inside
+- [Sub-accounts](/pro/concepts/sub-accounts) — choosing between tenants and groups
+- [Bulk export controls](/pro/concepts/select-security) — how policies gate bulk retrieval
+- [Authentication](/pro/api/authentication) — issuing the scoped tokens a policy applies to

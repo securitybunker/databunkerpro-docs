@@ -77,6 +77,7 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Security overview](pro/get-started/security-overview.mdx)** — corrected an unqualified "Shamir shares recover a lost wrapping key" claim, added the no-key-copy/no-escrow position, and added encryption service availability | Question 7 (partial) |
 | **[Production checklist](pro/installation/production-checklist.mdx)** — new page: a go-live gate covering keys, database, network, access control, backup, licence capacity, and monitoring, linking out to the deep pages | Question 4 (partial) |
 | **[Backup and recovery](pro/administration/backup-and-recovery.mdx)** — new page: the three artefacts a backup needs (database + wrapping key + licence), restore runbook, RPO/RTO, a restore drill, and the sanctioned `BulkListAllUsers` export path | Question 5, question 8 (out) |
+| **Voice pass** — every `## Conclusion` / `## Why Choose` sales block removed site-wide, marketing openers cut, emoji headings gone, and **Next steps** added to 8 dead-end pages. Nine pages now route readers to the [quickstart](pro/get-started/quickstart.mdx), up from three | Question 1 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 
 **All five Priority 0 pages are shipped except the hub page (P0.1).** The highest-value remaining
@@ -113,7 +114,7 @@ threat model (P1.2).
 
 | # | Question | Today | Where it stands |
 | --- | --- | --- | --- |
-| 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off `pii-vault.mdx` and `architecture.mdx`, and performance promoted to position 2. Still missing: a hub page and a Pro-vs-OSS decision page. |
+| 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off site-wide, performance promoted to position 2, and the landing page now leads with the one-command demo. Still missing: a hub page and a Pro-vs-OSS decision page. |
 | 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`. Still missing: framework guides, and an SDK page that is more than 4 links to GitHub. |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) now gates go-live. Still missing: monitoring and upgrade/version-support pages. |
@@ -245,13 +246,20 @@ a signal about the project, not about the docs.
 
 ### Priority 2 — voice, structure, and polish
 
-#### Fix the voice (this is the "appealing to a CTO" lever)
+#### ✅ Fix the voice (this is the "appealing to a CTO" lever)
 
-The repo contains two distinct registers, and the wrong one is on the entry pages.
+The target register is `performance.mdx`: state measurements, name the bottleneck, concede weaknesses
+("Oracle writes ~2.4× slower", "~3× the on-disk size"), and mark projections as projections.
 
-**Standardise on the `performance.mdx` register.** It states measurements, names the bottleneck,
-concedes weaknesses ("Oracle writes ~2.4× slower", "~3× the on-disk size"), and marks projections
-as projections. A CTO reading that page trusts the product. Apply it everywhere.
+Done across the site — **zero** `## Conclusion`, `## Why Choose`, or "In today's …" blocks remain, and
+zero emoji headings. Every page that ended in a sales block now ends in **Next steps**. `fuzzy-search`
+gained an honest *Performance* section saying the feature is **not** covered by the benchmarks;
+`access-control` traded nine bullets of "compliance-ready / developer-friendly" for a statement of what
+CRBAC actually does differently from RBAC.
+
+Two follow-ups, both minor: a sweep of the remaining unfalsifiable adjectives (`advanced` ×5,
+`comprehensive` ×3, `robust`/`seamless` ×2 each), and cost-or-limits statements on the concept pages
+that still make capability claims with no numbers — `tokenization.mdx` and `record-versioning.mdx`.
 
 #### Restructure the navigation
 
@@ -290,8 +298,8 @@ because the plumbing already exists.
 
 1. Add `index.mdx` hub with a card grid — see P0.1.
 2. ✅ Move `performance` to position 2 under *Get started*.
-3. ✅ Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers from `pii-vault.mdx` and `architecture.mdx`.
-4. ⚠️ Remove emoji from all headings — all 9 removed; `access-control.mdx` still has `## Why Choose CRBAC?`, and body ✅/❌ markers were kept.
+3. ✅ Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers — done site-wide, not just the two pages originally named.
+4. ✅ Remove emoji from all headings — all 9 removed. Body ✅/❌ comparison markers were kept deliberately.
 5. ✅ Add a non-localhost entry to `openapi.yml` `servers:`.
 6. Add `⏱`/prerequisites callouts to the four install pages.
 7. ✅ Wrap the FAQ in `<Accordion>`.
@@ -306,7 +314,7 @@ because the plumbing already exists.
 | **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | **Done.** The three that unblock a buying decision. |
 | **3** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
 | **4** | SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · monitoring + upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
-| **5** | `Concepts` split · voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
+| **5** | `Concepts` split · ✅ voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
 
 **Summary:** the docs are already excellent at the hard technical question (`performance.mdx` beats
 every competitor site examined) and near-silent on the five commercial ones — *how do I get in, how do
