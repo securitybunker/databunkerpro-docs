@@ -39,7 +39,15 @@ Some of Databunker Pro's enterprise security features:
 
 ## Try it out for yourself
 
-Explore common use cases in our sandbox.
+Start a throwaway instance with one command — no database, no configuration, erased when the container stops:
+
+```bash
+docker run -p 3000:3000 -d --rm --name databunkerpro securitybunker/databunkerpro demo
+```
+
+Then follow the [quickstart](/pro/get-started/quickstart) to create a user record and store an encrypted file.
+
+Or explore common use cases in our hosted sandbox.
 
 <Columns cols={3}>
 <Card
