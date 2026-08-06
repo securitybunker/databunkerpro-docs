@@ -1,0 +1,129 @@
+---
+title: Monitoring
+description: Scrape the Prometheus metrics endpoint, alert on the thresholds that matter, and cover the two things metrics cannot tell you — licence usage and database health.
+---
+
+Databunker Pro exposes Prometheus metrics at `GET /metrics`. That covers the application tier. Two things it does not cover — **licence usage** and **database health** — come from elsewhere, and both are ways a healthy-looking instance can still fail.
+
+| What to watch | Source |
+| ------------- | ------ |
+| Request rate, errors, latency, saturation | `GET /metrics` (Prometheus) |
+| Records used against your licence cap | `SystemGetSystemStats` API |
+| Database CPU, IOPS, index cache-hit ratio | Your database provider (RDS, Cloud SQL, …) |
+
+<Warning>
+`/metrics` is served without authentication. It reveals which API methods are in use and at what volume, so bind it to an internal interface, or restrict it at the ingress or load balancer. Do not expose it publicly.
+</Warning>
+
+## Scrape configuration
+
+```yaml
+scrape_configs:
+  - job_name: databunkerpro
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["databunkerpro:3000"]
+```
+
+On Kubernetes, target the pods rather than the service so each instance is scraped individually — a single unhealthy replica behind a load balancer is otherwise invisible.
+
+## What is exposed
+
+| Metric | Labels | Use |
+| ------ | ------ | --- |
+| `http_requests_total` | `method`, `path`, `status` | Request and error rates, per endpoint |
+| `http_request_duration_seconds` | `method`, `path` | Latency percentiles (histogram) |
+| `http_requests_in_flight` | — | Saturation |
+| `process_resident_memory_bytes` | — | Memory use |
+| `process_cpu_seconds_total` | — | CPU use |
+| `process_start_time_seconds` | — | Restart detection |
+| `go_goroutines` | — | Goroutine leaks |
+
+`path` carries the matched route (`/v2/UserCreate`), and anything unmatched is bucketed as `other`, so cardinality stays bounded no matter what scanners send.
+
+<Note>
+The duration histogram is labelled by `method` and `path` but **not** by `status`, so latency cannot be split by response code. Alert on error rate and latency separately.
+</Note>
+
+## Alert rules
+
+```yaml
+groups:
+  - name: databunkerpro
+    rules:
+      - alert: DatabunkerProDown
+        expr: up{job="databunkerpro"} == 0
+        for: 2m
+        annotations:
+          summary: "Instance is not responding to scrapes"
+
+      - alert: DatabunkerProRestarted
+        expr: changes(process_start_time_seconds{job="databunkerpro"}[1h]) > 0
+        annotations:
+          summary: "Instance restarted — confirm it came back up"
+
+      - alert: DatabunkerProServerErrors
+        expr: |
+          sum(rate(http_requests_total{job="databunkerpro",status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{job="databunkerpro"}[5m])) > 0.01
+        for: 5m
+        annotations:
+          summary: "Over 1% of requests are returning 5xx"
+
+      - alert: DatabunkerProAccessDeniedSpike
+        expr: sum(rate(http_requests_total{job="databunkerpro",status="403"}[5m])) > 1
+        for: 10m
+        annotations:
+          summary: "Sustained 403s — licence limit, expiry, or failing authorisation"
+
+      - alert: DatabunkerProSlowDetokenisation
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="databunkerpro",path="/v2/UserGet"}[5m]))
+          ) > 0.05
+        for: 10m
+        annotations:
+          summary: "UserGet p95 above 50 ms (benchmark is ~15 ms)"
+```
+
+**Why these thresholds.** The p95 figure comes from the [benchmarks](/pro/get-started/performance#reads-detokenisation-latency): `UserGet` measured ~15 ms p95 against a fully-loaded 10 M-record vault. Sustained latency several times that usually means the database index no longer fits in RAM — check the cache-hit ratio before adding application instances.
+
+<Warning>
+**A 403 spike is ambiguous and worth investigating rather than ignoring.** The same status code covers a failing API token, a policy denial, `Record limit reached` when the [licence cap](/pro/get-started/licensing#when-the-record-cap-is-reached) is hit, and `License expired` when the licence lapses. The metric cannot distinguish them — check the response messages in your application logs.
+</Warning>
+
+## Licence usage
+
+Nothing in `/metrics` reports how full the vault is. `SystemGetSystemStats` does:
+
+```bash
+curl -X POST http://localhost:3000/v2/SystemGetSystemStats \
+  -H "X-Bunker-Token: YOUR-ROOT-TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+Alert on two things, both of which fail silently until a write is refused:
+
+- `totalnumrecords / licensemaxrecords` crossing **80%**
+- `licensefinalexpiration` coming within **30 days**
+
+A scheduled job that polls this and exports the values to your metrics system closes the gap. See [licensing and limits](/pro/get-started/licensing#checking-your-usage).
+
+## Database health
+
+The [benchmarks](/pro/get-started/performance#the-key-insight-the-bottleneck-moves-with-scale) show that beyond tens of millions of records the **database** is the limit, not Databunker Pro. Two figures matter, and both come from your provider rather than from Databunker Pro:
+
+- **Database CPU above 70%** — adding application instances will not raise write throughput past this point; size the database up instead.
+- **Index cache-hit ratio below 97%** — the benchmark held ≥97% at every scale. Below that, lookups start reading from disk and detokenisation latency climbs.
+
+## Audit trail
+
+The [audit trail](/pro/get-started/security-overview) is a compliance control, not a debug log. Its failure mode is silence, so treat a gap in audit records as an incident rather than a monitoring nuisance — a period of activity with no corresponding audit entries is the signal to look for.
+
+## Next steps
+
+- [Production checklist](/pro/installation/production-checklist) — the go-live gate that includes these alerts
+- [Performance and sizing](/pro/get-started/performance) — where the thresholds come from
+- [Licensing and limits](/pro/get-started/licensing) — record caps and expiry behaviour
+- [Backup and recovery](/pro/administration/backup-and-recovery) — what to do when an alert turns into an incident
