@@ -112,7 +112,7 @@ This policy allows a `security-analyst` role to read full user records **only** 
   "Effect": "Allow",
   "Principal": { "Role": "security-analyst" },
   "Action": ["UserGet"],
-  "Resource": ["*.profile"],
+  "Resource": ["users.profile.*"],
   "Condition": {
     "StringEquals": {
       "${request_metadata:purpose}":     "fraud-investigation",
