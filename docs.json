@@ -47,6 +47,7 @@
                   "pro/administration/key-rotation",
                   "pro/administration/shamir-keys",
                   "pro/administration/backup-and-recovery",
+                  "pro/administration/monitoring",
                   "pro/administration/multi-tenancy",
                   "pro/administration/access-control"
                 ]

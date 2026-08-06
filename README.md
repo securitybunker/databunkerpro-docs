@@ -21,7 +21,7 @@ pro/                      Databunker Pro (commercial, self-hosted)
   installation/           Docker Compose, Kubernetes/Helm, unattended, Oracle backend,
                           credentials, production checklist
   administration/         Master key, key rotation, Shamir shares, backup & recovery,
-                          multi-tenancy, access control
+                          monitoring, multi-tenancy, access control
   concepts/               Tokenization, file vault, search, versioning, sub-accounts, deployment
   comparisons/            vs AWS Cognito, vs HashiCorp Vault, vs building it yourself
   migrations/             Moving existing users in: SQL users table, AWS Cognito
@@ -78,6 +78,7 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **[Production checklist](pro/installation/production-checklist.mdx)** — new page: a go-live gate covering keys, database, network, access control, backup, licence capacity, and monitoring, linking out to the deep pages | Question 4 (partial) |
 | **[Backup and recovery](pro/administration/backup-and-recovery.mdx)** — new page: the three artefacts a backup needs (database + wrapping key + licence), restore runbook, RPO/RTO, a restore drill, and the sanctioned `BulkListAllUsers` export path | Question 5, question 8 (out) |
 | **Voice pass** — every `## Conclusion` / `## Why Choose` sales block removed site-wide, marketing openers cut, emoji headings gone, and **Next steps** added to 8 dead-end pages. Nine pages now route readers to the [quickstart](pro/get-started/quickstart.mdx), up from three | Question 1 (partial) |
+| **[Monitoring](pro/administration/monitoring.mdx)** — new page: Prometheus scrape config and alert rules with thresholds from the benchmarks, plus licence usage and database health, which `/metrics` does not report | Question 4 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
 
 **All five Priority 0 pages are shipped except the hub page (P0.1).** The highest-value remaining
@@ -117,7 +118,7 @@ threat model (P1.2).
 | 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off site-wide, performance promoted to position 2, and the landing page now leads with the one-command demo. Still missing: a hub page and a Pro-vs-OSS decision page. |
 | 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`. Still missing: framework guides, and an SDK page that is more than 4 links to GitHub. |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
-| 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) now gates go-live. Still missing: monitoring and upgrade/version-support pages. |
+| 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) gates go-live and [monitoring](pro/administration/monitoring.mdx) covers alerting. Still missing: upgrades and version support. |
 | 5 | What breaks, and how badly? | ⚠️ | Key loss, database loss, and recovery are documented. Still missing: a threat model, and root-token compromise. |
 | 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
 | 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
@@ -233,10 +234,10 @@ the OSS quickstart.
 create/get, `AppdataCreate`, agreement accept, session create). The `servers:` half of this item is
 done — a non-localhost entry is now listed first.
 
-#### P1.6 Ops pages: `monitoring.mdx`, `upgrades.mdx`
+#### P1.6 Ops pages — monitoring ✅, upgrades outstanding
 
-- **Monitoring** — health endpoint, what to alert on (database CPU ≥ 70%, index cache-hit < 97%, 403 rate, audit-write failures). Only the checklist covers it today; there is no page.
-- ~~HA/scaling~~ — **not needed.** Already stated in `security-overview.mdx`, `architecture.mdx`, `performance.mdx`, the FAQ, and `licensing.mdx`. A seventh restatement would be duplication.
+- ✅ **Monitoring** — shipped as [`pro/administration/monitoring.mdx`](pro/administration/monitoring.mdx): Prometheus scrape config, alert rules with thresholds taken from the benchmarks, plus the two things metrics cannot report (licence usage via `SystemGetSystemStats`, database health via your cloud provider).
+- ~~HA/scaling~~ — **not needed.** Already stated in `security-overview.mdx`, `architecture.mdx`, `performance.mdx`, the FAQ, and `licensing.mdx`.
 - **Upgrades & version support** — container tag policy, whether upgrades run schema migrations, rollback, supported-version window. Vault keeps 11 versions of docs online; there is no upgrade page here at all.
 
 #### P1.7 `changelog.mdx`
@@ -313,7 +314,7 @@ because the plumbing already exists.
 | **1** | Hub page · ✅ quickstart · remaining quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
 | **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | **Done.** The three that unblock a buying decision. |
 | **3** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
-| **4** | SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · monitoring + upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
+| **4** | SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · ✅ monitoring · upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
 | **5** | `Concepts` split · ✅ voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
 
 **Summary:** the docs are already excellent at the hard technical question (`performance.mdx` beats
