@@ -2,7 +2,7 @@
 title: Fuzzy search
 ---
 
-**Fuzzy Search** in Databunker Pro enables intelligent, approximate matching for user records, allowing you to find users even when search terms don't match exactly. This powerful feature is essential for applications that need to handle typos, partial matches, or variations in user data.
+Fuzzy search finds user records when the search term does not match exactly — a misspelled name, a partial email, a phone number in a different format. It is used where a human is doing the searching: support desks, admin consoles, and deduplication during a migration.
 
 ## What Problems Does Fuzzy Search Solve?
 
@@ -368,38 +368,13 @@ for user in users:
 
 The JavaScript/TypeScript examples above can be easily adapted for any frontend framework (React, Vue, Angular) or backend environment (Node.js, Deno, Bun). The core API integration pattern remains the same across all environments.
 
-## Conclusion
+## Performance
 
-Databunker Pro's Fuzzy Search API provides a powerful, secure, and efficient way to find users in large datasets. By combining intelligent matching algorithms with robust security controls, it enables applications to deliver excellent user experiences while maintaining data privacy and compliance requirements.
+Fuzzy search is **not covered by the published [benchmarks](/pro/get-started/performance)**, which measure the exact-match write and detokenisation paths only. Unlike a lookup by token or email — a hashed-index point read at ~14 ms — approximate matching cannot use those indexes, so cost grows with the number of records examined. Restrict it to administrative interfaces and measure it against your own data before putting it on a user-facing path.
 
-The fuzzy search capability is particularly valuable for:
+## Next steps
 
-- Customer support systems
-- User administration interfaces
-- Data migration projects
-- Applications with large user bases
-
-### Getting Started
-
-We provide official SDKs for both JavaScript/TypeScript and Python developers:
-
-**For JavaScript/TypeScript developers:**
-
-- [Databunker Pro JavaScript SDK](https://github.com/securitybunker/databunkerpro-js) - `npm install databunkerpro-js`
-- TypeScript support with full type definitions
-- ES Modules and CommonJS compatibility
-- Comprehensive API coverage
-
-**For Python developers:**
-
-- [Databunker Pro Python SDK](https://github.com/securitybunker/databunkerpro-python) - `pip install databunkerpro`
-- Type hints and comprehensive documentation
-- Built-in error handling and validation
-
-Both SDKs provide:
-
-- Simplified API integration
-- Built-in error handling and validation
-- Support for all Databunker Pro features including fuzzy search
-
-With proper implementation and security considerations, fuzzy search can significantly improve your application's usability and user satisfaction.
+- [Partial search](/pro/concepts/partial-search) — prefix and substring matching on indexed fields
+- [Access control](/pro/administration/access-control) — restrict who may run a search and which fields come back
+- [Bulk export controls](/pro/concepts/select-security) — why enumeration is default-deny
+- [SDKs](/pro/developer-tools/overview) — JavaScript and Python clients
