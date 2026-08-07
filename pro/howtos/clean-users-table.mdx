@@ -26,9 +26,13 @@ A user in Databunker Pro is identified by a UUID **token**. Beyond the main `use
 | `requests` | `token` | Data-subject requests |
 | `agreements` | `token` | Consent / legal-basis agreements |
 | `audit` | `record` | Audit events for the user |
+| `files` | `token` | Encrypted file metadata and wrapped per-file keys |
+| `filetags` | `token` | File tags |
 | `xtokens` | `usertoken` | Per-user access tokens (only rows where `usertoken` is set — see below) |
 
 The tokenization vault (`tokens`) is **not** keyed by user token and is left out by default — see [Tokenization vault](#tokenization-vault) below.
+
+Clearing `files` removes the metadata and the encryption keys, but not the stored objects themselves — see [Stored file objects](#stored-file-objects) below.
 
 ## Before you start
 
@@ -50,6 +54,8 @@ TRUNCATE TABLE sharedrecords RESTART IDENTITY;
 TRUNCATE TABLE requests RESTART IDENTITY;
 TRUNCATE TABLE agreements RESTART IDENTITY;
 TRUNCATE TABLE audit RESTART IDENTITY;
+TRUNCATE TABLE files RESTART IDENTITY;
+TRUNCATE TABLE filetags RESTART IDENTITY;
 DELETE FROM xtokens WHERE usertoken IS NOT NULL AND usertoken::text <> '';
 ```
 
@@ -72,6 +78,24 @@ If you use [tokenization](/pro/concepts/tokenization), a user's sensitive fields
 -- truncating the parent cascades to tokens_p0..p240.
 TRUNCATE TABLE tokens RESTART IDENTITY;
 ```
+
+## Stored file objects
+
+The `files` table holds the metadata and the per-file key; the encrypted file itself lives in the configured [object storage](/pro/concepts/file-vault) backend — local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage — under `tenant/<tenantid>/<usertoken>/<fileuuid>`.
+
+Truncating `files` destroys the keys, so the stored objects can never be decrypted again. What remains is unreadable ciphertext, plus object paths that still reveal which user tokens existed. Remove them as well to reclaim the space:
+
+```bash
+# local backend, using the object_storage.local_dir from databunker.yaml
+rm -rf /databunker/files/tenant/*
+```
+
+```bash
+# Amazon S3
+aws s3 rm "s3://<your-bucket>/tenant/" --recursive
+```
+
+Do this **after** truncating the tables — deleting the objects first leaves metadata rows pointing at files that no longer exist.
 
 ## What is preserved
 
