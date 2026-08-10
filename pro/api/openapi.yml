@@ -1408,6 +1408,62 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalError'
+  /v2/UserDeleteBulk:
+    post:
+      summary: Delete multiple users
+      description: Deletes several user records in one request. Each entry identifies a user by an indexed field. Entries that match no record are skipped, so `deleted` can be lower than `total`.
+      tags: [User Tokenization]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [users]
+              properties:
+                users:
+                  type: array
+                  description: Users to delete, identified by an indexed field
+                  items:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      login:
+                        type: string
+                      custom:
+                        type: string
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  total:
+                    type: integer
+                    description: Number of entries submitted
+                  deleted:
+                    type: integer
+                    description: Number of records actually deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /v2/AppdataCreate:
     post:
       summary: Create application data for user
@@ -1848,6 +1904,16 @@ paths:
                 finaltime:
                   type: string
                   description: Absolute expiration time for the file (e.g., '90d', '2026-01-01')
+                tags:
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+                  description: |
+                    File tags. Accepts an array of strings or a comma-separated string.
+                    Tags are lowercased and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
+                    and at most 16 are kept per file. Tags drive file-level authorisation.
                 request_metadata:
                   type: object
                   description: Additional metadata for the request
@@ -2019,6 +2085,75 @@ paths:
                         creationtime:
                           type: integer
                           description: Creation time (Unix timestamp)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/FileReplaceTags:
+    post:
+      summary: Replace the tags on a file
+      description: |
+        Replaces the complete tag set on a file. The supplied list is authoritative — tags not
+        included are removed.
+
+        Tags are lowercased, trimmed and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
+        and at most 16 are kept. The caller must be authorised for both the file's current tags and
+        the tags being applied.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, fileuuid, tags]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: UUID of the file to retag
+                tags:
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+                  description: The complete replacement tag set — an array or a comma-separated string
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Tags replaced successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User token that owns the file
+                  fileuuid:
+                    type: string
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    description: The normalised tag set now stored
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4208,6 +4343,47 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /v2/TenantDelete:
+    post:
+      summary: Delete a tenant
+      description: Deletes a tenant and its records. The system tenant (id `1`) cannot be deleted.
+      tags: [Tenant Management]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantid]
+              properties:
+                tenantid:
+                  type: integer
+                  description: ID of the tenant to delete
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  tenantid:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /v2/TenantListTenants:
     post:
       summary: List all tenants
@@ -4594,6 +4770,46 @@ paths:
                   wrappingkey:
                     type: string
                     description: The generated wrapping key
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/SystemSetLicenseKey:
+    post:
+      summary: Set the license key
+      description: Applies a new license key to a running instance. Only the main tenant administrator (tenant id `1`) may call this. The key is validated before it is saved — an invalid or expired key is rejected and the existing license is left in place.
+      tags: [System Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [licensekey]
+              properties:
+                licensekey:
+                  type: string
+                  description: The new license key
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  result:
+                    type: string
+                    example: "done"
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
