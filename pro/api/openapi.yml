@@ -72,7 +72,7 @@ info:
     url: https://databunker.org/legal/terms/
 
 servers:
-  - url: https://databunker.internal.example.com
+  - url: https://databunkerpro.myorg.com
     description: Your self-hosted Databunker Pro deployment
   - url: http://localhost:3000
     description: Local development server
@@ -81,9 +81,10 @@ security:
   - XBunkerToken: []
 
 paths:
-  # ========================================
+
+  #========================================
   # USER MANAGEMENT
-  # ========================================
+  #========================================
   /v2/UserCreate:
     post:
       summary: Create a new user token
@@ -834,10 +835,6 @@ paths:
                   requestuuid:
                     type: string
                     description: UUID of the patch request
-
-  # ========================================
-  # BULK OPERATIONS
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -846,6 +843,360 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # FILE STORAGE
+  #========================================
+  /v2/FileCreate:
+    post:
+      summary: Store a file for a user
+      description: |
+        Stores an encrypted file for a user. The file content is supplied as a base64-encoded `filedata` field. Each file is encrypted with a per-file key (wrapped by the user's record key) and stored in the configured object-storage backend (local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage).
+
+        If the same content is uploaded again for the same user, the response sets `duplicate` to `true` and no new object is written.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, filename, filedata]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                filename:
+                  type: string
+                  description: Name of the file (1-255 characters)
+                filedata:
+                  type: string
+                  format: byte
+                  description: Base64-encoded file content
+                mimetype:
+                  type: string
+                  description: MIME type of the file. If omitted, it is auto-detected from the content.
+                slidingtime:
+                  type: string
+                  description: Sliding retention period for the file (e.g., '30d', '1y')
+                finaltime:
+                  type: string
+                  description: Absolute expiration time for the file (e.g., '90d', '2026-01-01')
+                tags:
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+                  description: |
+                    File tags. Accepts an array of strings or a comma-separated string.
+                    Tags are lowercased and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
+                    and at most 16 are kept per file. Tags drive file-level authorisation.
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File stored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  fileuuid:
+                    type: string
+                    description: Unique identifier of the stored file
+                  duplicate:
+                    type: boolean
+                    description: True if the file content already existed for this user
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/FileGet:
+    post:
+      summary: Get a user file
+      description: |
+        Returns the decrypted content of a user file. The file is selected by `fileuuid` (preferred) or by `filename`. When selecting by `filename`, the most recently created file with that name is returned. At least one of `fileuuid` or `filename` is required.
+
+        By default the content is returned as a base64-encoded `filedata` field inside a JSON response. Set `raw` to `true` to receive the decrypted bytes directly with the appropriate `Content-Type` and `Content-Disposition` headers (useful for direct downloads).
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: Unique identifier of the file to retrieve (preferred)
+                filename:
+                  type: string
+                  description: Name of the file to retrieve (resolves to the most recent file with this name)
+                raw:
+                  type: boolean
+                  description: If true, return the raw decrypted bytes instead of a base64 JSON response
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  fileuuid:
+                    type: string
+                    description: Unique identifier of the file
+                  filename:
+                    type: string
+                    description: Name of the file
+                  mimetype:
+                    type: string
+                    description: MIME type of the file
+                  size:
+                    type: integer
+                    description: Size of the file in bytes
+                  filedata:
+                    type: string
+                    format: byte
+                    description: Base64-encoded file content
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Raw decrypted file content (returned when raw is true)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/FileListUserFiles:
+    post:
+      summary: List user files
+      description: Retrieves the metadata of all files owned by a user. File content is not returned.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Files listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fileuuid:
+                          type: string
+                          description: Unique identifier of the file
+                        filename:
+                          type: string
+                          description: Name of the file
+                        mimetype:
+                          type: string
+                          description: MIME type of the file
+                        size:
+                          type: integer
+                          description: Size of the file in bytes
+                        doublehash:
+                          type: string
+                          description: Hex-encoded double hash of the file content
+                        creationtime:
+                          type: integer
+                          description: Creation time (Unix timestamp)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/FileReplaceTags:
+    post:
+      summary: Replace the tags on a file
+      description: |
+        Replaces the complete tag set on a file. The supplied list is authoritative — tags not
+        included are removed.
+
+        Tags are lowercased, trimmed and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
+        and at most 16 are kept. The caller must be authorised for both the file's current tags and
+        the tags being applied.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, fileuuid, tags]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: UUID of the file to retag
+                tags:
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+                  description: The complete replacement tag set — an array or a comma-separated string
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: Tags replaced successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User token that owns the file
+                  fileuuid:
+                    type: string
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    description: The normalised tag set now stored
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v2/FileDelete:
+    post:
+      summary: Delete a user file
+      description: Removes a user file, deleting both the stored object and its metadata.
+      tags: [File Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, identity, fileuuid]
+              properties:
+                mode:
+                  type: string
+                  enum: [login, token, email, phone, custom]
+                  description: Mode of user identification
+                identity:
+                  type: string
+                  description: User identifier corresponding to the mode
+                fileuuid:
+                  type: string
+                  description: Unique identifier of the file to delete
+                request_metadata:
+                  type: object
+                  description: Additional metadata for the request
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  token:
+                    type: string
+                    description: User's unique token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # BULK OPERATIONS
+  #========================================
   /v2/BulkListUnlock:
     post:
       summary: Create bulk list unlock
@@ -1397,9 +1748,6 @@ paths:
                           type: object
                           description: User profile information
 
-  # ========================================
-  # APP DATA MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1464,6 +1812,9 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  #========================================
+  # APP DATA MANAGEMENT
+  #========================================
   /v2/AppdataCreate:
     post:
       summary: Create application data for user
@@ -1853,90 +2204,6 @@ paths:
                   requestuuid:
                     type: string
                     description: UUID of the update request
-
-  # ========================================
-  # FILE STORAGE
-  # ========================================
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/AccessDenied'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /v2/FileCreate:
-    post:
-      summary: Store a file for a user
-      description: |
-        Stores an encrypted file for a user. The file content is supplied as a base64-encoded `filedata` field. Each file is encrypted with a per-file key (wrapped by the user's record key) and stored in the configured object-storage backend (local disk, Amazon S3, Google Cloud Storage, or Azure Blob Storage).
-
-        If the same content is uploaded again for the same user, the response sets `duplicate` to `true` and no new object is written.
-      tags: [File Storage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode, identity, filename, filedata]
-              properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
-                identity:
-                  type: string
-                  description: User identifier corresponding to the mode
-                filename:
-                  type: string
-                  description: Name of the file (1-255 characters)
-                filedata:
-                  type: string
-                  format: byte
-                  description: Base64-encoded file content
-                mimetype:
-                  type: string
-                  description: MIME type of the file. If omitted, it is auto-detected from the content.
-                slidingtime:
-                  type: string
-                  description: Sliding retention period for the file (e.g., '30d', '1y')
-                finaltime:
-                  type: string
-                  description: Absolute expiration time for the file (e.g., '90d', '2026-01-01')
-                tags:
-                  oneOf:
-                    - type: array
-                      items:
-                        type: string
-                    - type: string
-                  description: |
-                    File tags. Accepts an array of strings or a comma-separated string.
-                    Tags are lowercased and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
-                    and at most 16 are kept per file. Tags drive file-level authorisation.
-                request_metadata:
-                  type: object
-                  description: Additional metadata for the request
-      responses:
-        '200':
-          description: File stored successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  token:
-                    type: string
-                    description: User's unique token
-                  fileuuid:
-                    type: string
-                    description: Unique identifier of the stored file
-                  duplicate:
-                    type: boolean
-                    description: True if the file content already existed for this user
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -1946,275 +2213,9 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /v2/FileGet:
-    post:
-      summary: Get a user file
-      description: |
-        Returns the decrypted content of a user file. The file is selected by `fileuuid` (preferred) or by `filename`. When selecting by `filename`, the most recently created file with that name is returned. At least one of `fileuuid` or `filename` is required.
-
-        By default the content is returned as a base64-encoded `filedata` field inside a JSON response. Set `raw` to `true` to receive the decrypted bytes directly with the appropriate `Content-Type` and `Content-Disposition` headers (useful for direct downloads).
-      tags: [File Storage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode, identity]
-              properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
-                identity:
-                  type: string
-                  description: User identifier corresponding to the mode
-                fileuuid:
-                  type: string
-                  description: Unique identifier of the file to retrieve (preferred)
-                filename:
-                  type: string
-                  description: Name of the file to retrieve (resolves to the most recent file with this name)
-                raw:
-                  type: boolean
-                  description: If true, return the raw decrypted bytes instead of a base64 JSON response
-                request_metadata:
-                  type: object
-                  description: Additional metadata for the request
-      responses:
-        '200':
-          description: File retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  token:
-                    type: string
-                    description: User's unique token
-                  fileuuid:
-                    type: string
-                    description: Unique identifier of the file
-                  filename:
-                    type: string
-                    description: Name of the file
-                  mimetype:
-                    type: string
-                    description: MIME type of the file
-                  size:
-                    type: integer
-                    description: Size of the file in bytes
-                  filedata:
-                    type: string
-                    format: byte
-                    description: Base64-encoded file content
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-                description: Raw decrypted file content (returned when raw is true)
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/AccessDenied'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /v2/FileListUserFiles:
-    post:
-      summary: List user files
-      description: Retrieves the metadata of all files owned by a user. File content is not returned.
-      tags: [File Storage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode, identity]
-              properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
-                identity:
-                  type: string
-                  description: User identifier corresponding to the mode
-                request_metadata:
-                  type: object
-                  description: Additional metadata for the request
-      responses:
-        '200':
-          description: Files listed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  token:
-                    type: string
-                    description: User's unique token
-                  files:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        fileuuid:
-                          type: string
-                          description: Unique identifier of the file
-                        filename:
-                          type: string
-                          description: Name of the file
-                        mimetype:
-                          type: string
-                          description: MIME type of the file
-                        size:
-                          type: integer
-                          description: Size of the file in bytes
-                        doublehash:
-                          type: string
-                          description: Hex-encoded double hash of the file content
-                        creationtime:
-                          type: integer
-                          description: Creation time (Unix timestamp)
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/AccessDenied'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /v2/FileReplaceTags:
-    post:
-      summary: Replace the tags on a file
-      description: |
-        Replaces the complete tag set on a file. The supplied list is authoritative — tags not
-        included are removed.
-
-        Tags are lowercased, trimmed and de-duplicated, must match `^[a-z0-9][a-z0-9._-]{0,49}$`,
-        and at most 16 are kept. The caller must be authorised for both the file's current tags and
-        the tags being applied.
-      tags: [File Storage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode, identity, fileuuid, tags]
-              properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
-                identity:
-                  type: string
-                  description: User identifier corresponding to the mode
-                fileuuid:
-                  type: string
-                  description: UUID of the file to retag
-                tags:
-                  oneOf:
-                    - type: array
-                      items:
-                        type: string
-                    - type: string
-                  description: The complete replacement tag set — an array or a comma-separated string
-                request_metadata:
-                  type: object
-                  description: Additional metadata for the request
-      responses:
-        '200':
-          description: Tags replaced successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  token:
-                    type: string
-                    description: User token that owns the file
-                  fileuuid:
-                    type: string
-                  tags:
-                    type: array
-                    items:
-                      type: string
-                    description: The normalised tag set now stored
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/AccessDenied'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /v2/FileDelete:
-    post:
-      summary: Delete a user file
-      description: Removes a user file, deleting both the stored object and its metadata.
-      tags: [File Storage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode, identity, fileuuid]
-              properties:
-                mode:
-                  type: string
-                  enum: [login, token, email, phone, custom]
-                  description: Mode of user identification
-                identity:
-                  type: string
-                  description: User identifier corresponding to the mode
-                fileuuid:
-                  type: string
-                  description: Unique identifier of the file to delete
-                request_metadata:
-                  type: object
-                  description: Additional metadata for the request
-      responses:
-        '200':
-          description: File deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  token:
-                    type: string
-                    description: User's unique token
-
-  # ========================================
+  #========================================
   # LEGAL BASIS & AGREEMENT MANAGEMENT
-  # ========================================
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/AccessDenied'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+  #========================================
   /v2/LegalBasisCreate:
     post:
       summary: Create legal basis
@@ -2715,10 +2716,6 @@ paths:
                   status:
                     type: string
                     example: "ok"
-
-  # ========================================
-  # PROCESSING ACTIVITY MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -2727,6 +2724,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # PROCESSING ACTIVITY MANAGEMENT
+  #========================================
   /v2/ProcessingActivityCreate:
     post:
       summary: Create processing activity
@@ -2991,16 +2992,16 @@ paths:
                         title:
                           type: string
                           description: Title of the processing activity
-
-  # ========================================
-  # TOKENIZATION MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/AccessDenied'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # TOKENIZATION MANAGEMENT
+  #========================================
   /v2/TokenCreate:
     post:
       summary: Create token for sensitive data
@@ -3207,16 +3208,16 @@ paths:
                       created:
                         type: integer
                         description: Number of tokens created
-
-  # ========================================
-  # GROUP MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/AccessDenied'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # GROUP MANAGEMENT
+  #========================================
   /v2/GroupCreate:
     post:
       summary: Create a new group
@@ -3605,10 +3606,6 @@ paths:
                   status:
                     type: string
                     example: "ok"
-
-  # ========================================
-  # ROLE & POLICY MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -3617,6 +3614,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # ROLE & POLICY MANAGEMENT
+  #========================================
   /v2/RoleCreate:
     post:
       summary: Create a new role
@@ -3962,10 +3963,6 @@ paths:
                   status:
                     type: string
                     example: "ok"
-
-  # ========================================
-  # AUTHENTICATION & ACCESS TOKENS
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -3974,6 +3971,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # AUTHENTICATION & ACCESS TOKENS
+  #========================================
   /v2/XTokenCreateForUser:
     post:
       summary: Create access token for user
@@ -4067,10 +4068,6 @@ paths:
                   xtoken:
                     type: string
                     description: The created access token
-
-  # ========================================
-  # AUDIT MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4079,6 +4076,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # AUDIT MANAGEMENT
+  #========================================
   /v2/AuditListUserEvents:
     post:
       summary: List user audit events
@@ -4183,12 +4184,6 @@ paths:
                   details:
                     type: object
                     description: Detailed information about the event
-
-
-
-  # ========================================
-  # TENANT MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4197,6 +4192,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # TENANT MANAGEMENT
+  #========================================
   /v2/TenantCreate:
     post:
       summary: Create a new tenant
@@ -4431,16 +4430,16 @@ paths:
                         tenantorg:
                           type: string
                           description: Organization name
-
-  # ========================================
-  # SHARED RECORDS
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/AccessDenied'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # SHARED RECORDS
+  #========================================
   /v2/SharedRecordCreate:
     post:
       summary: Create shared record
@@ -4532,10 +4531,6 @@ paths:
                   data:
                     type: object
                     description: Shared record data
-
-  # ========================================
-  # SESSION MANAGEMENT
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4544,6 +4539,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # SESSION MANAGEMENT
+  #========================================
   /v2/SessionUpsert:
     post:
       summary: Upsert session
@@ -4719,10 +4718,6 @@ paths:
                   sessiondata:
                     type: object
                     description: Session data
-
-  # ========================================
-  # SYSTEM OPERATIONS
-  # ========================================
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4731,6 +4726,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  #========================================
+  # SYSTEM OPERATIONS
+  #========================================
   /v2/SystemGenerateWrappingKey:
     post:
       summary: Generate wrapping key from Shamir's Secret Sharing keys
@@ -5306,7 +5305,6 @@ components:
         status:
           type: string
           example: "ok"
-
 
     Policy:
       type: object

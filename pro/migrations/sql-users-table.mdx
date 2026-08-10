@@ -115,7 +115,7 @@ CHUNK = 4000
 START_OFFSET = int(os.getenv("START_OFFSET", "0"))   # resume point after an interruption
 
 api = DatabunkerproAPI(
-    os.environ["DATABUNKER_API_URL"],       # e.g. https://databunker.internal.example.com
+    os.environ["DATABUNKER_API_URL"],       # e.g. https://databunkerpro.myorg.com
     os.environ["DATABUNKER_API_TOKEN"],
     os.getenv("DATABUNKER_TENANT_NAME", ""),
 )
