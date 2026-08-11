@@ -116,7 +116,7 @@ threat model (P1.2).
 | # | Question | Today | Where it stands |
 | --- | --- | --- | --- |
 | 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off site-wide, performance promoted to position 2, and the landing page now leads with the one-command demo. Still missing: a hub page and a Pro-vs-OSS decision page. |
-| 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`. Still missing: framework guides, and an SDK page that is more than 4 links to GitHub. |
+| 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`, and [developer tools](pro/developer-tools/overview.mdx) now carries install commands and a worked example for all four SDKs. Still missing: framework guides. |
 | 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
 | 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) gates go-live and [monitoring](pro/administration/monitoring.mdx) covers alerting. Still missing: upgrades and version support. |
 | 5 | What breaks, and how badly? | ⚠️ | Key loss, database loss, and recovery are documented. Still missing: a threat model, and root-token compromise. |
@@ -219,13 +219,13 @@ state their limits get believed about their strengths.
 Shipped as [`pro/get-started/licensing.mdx`](pro/get-started/licensing.mdx), placed in *Get started*
 rather than a new *Evaluate* group so it is reachable before that restructure happens.
 
-#### P1.4 Rewrite `developer-tools/overview.mdx` into a real SDK page
+#### P1.4 Rewrite `developer-tools/overview.mdx` into a real SDK page ✅
 
-Today: 32 lines, four cards pointing at GitHub. It should carry, per language: install command,
-a 10-line create-then-read example, current version, and a link to the reference. Then add framework
-guides — Express, Next.js, Django, Spring Boot, Laravel — following Supabase/Clerk/Neon. Also give
-`@databunker/store` and `@databunker/session-store` real pages; they're mentioned once, in step 5 of
-the OSS quickstart.
+Was 32 lines of cards pointing at GitHub. Now carries per-language install commands and a
+create-a-user example across five tabs — JavaScript, TypeScript, Python, PHP, Java — plus the
+browser-global build, and a section on when to skip the SDK and call the REST API directly.
+Registry coordinates were verified against npm, PyPI, Packagist and Maven Central at the time of
+writing; the Java client is **not** on Maven Central, so the page documents JitPack instead.
 
 #### P1.5 Add `x-codeSamples` to the OpenAPI spec
 
@@ -314,7 +314,7 @@ because the plumbing already exists.
 | **1** | Hub page · ✅ quickstart · remaining quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
 | **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | **Done.** The three that unblock a buying decision. |
 | **3** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
-| **4** | SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · ✅ monitoring · upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
+| **4** | ✅ SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · ✅ monitoring · upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
 | **5** | `Concepts` split · ✅ voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
 
 **Summary:** the docs are already excellent at the hard technical question (`performance.mdx` beats

@@ -3,9 +3,184 @@ title: Developer tools
 sidebarTitle: Overview
 ---
 
-Every SDK below needs a running instance to talk to. The fastest way to get one is [demo mode](/pro/get-started/quickstart) — a single `docker run`, no database required.
+Official clients for JavaScript, Python, PHP and Java. Each one wraps the same REST API, so anything in the [API reference](/pro/api/overview) is reachable from every SDK.
 
-## SDKs
+Every SDK needs a running instance to talk to. The fastest way to get one is [demo mode](/pro/get-started/quickstart) — a single `docker run`, no database required.
+
+## Install
+
+<Tabs>
+<Tab title="JavaScript">
+```bash
+npm install databunkerpro-js
+```
+
+The package ships CommonJS, ES module and browser builds from one install.
+
+```javascript
+// ES modules
+import DatabunkerproAPI from "databunkerpro-js";
+
+// CommonJS
+// const DatabunkerproAPI = require("databunkerpro-js");
+
+const api = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  "YOUR_ACCESS_TOKEN"
+);
+
+const user = await api.createUser({ email: "jane@example.com", name: "Jane" });
+console.log(user.token);
+```
+
+In a browser, loading the bundled build directly exposes the client as `window.DatabunkerproAPI`:
+
+```html
+<script src="node_modules/databunkerpro-js/lib/databunkerpro-api.browser.js"></script>
+<script>
+  const api = new DatabunkerproAPI("https://your-databunker-instance.com", "TOKEN");
+</script>
+```
+
+<Warning>
+Only do this for an internal admin console. A token shipped to a browser is readable by anyone with devtools — see [access control](/pro/administration/access-control) for scoping one down before it leaves your server.
+</Warning>
+</Tab>
+
+<Tab title="TypeScript">
+```bash
+npm install databunkerpro-js
+```
+
+Type definitions are bundled — there is no separate `@types` package to install.
+
+```typescript
+import DatabunkerproAPI from "databunkerpro-js";
+
+const api = new DatabunkerproAPI(
+  "https://your-databunker-instance.com",
+  process.env.DATABUNKER_TOKEN!
+);
+
+const user = await api.createUser(
+  { email: "jane@example.com", name: "Jane" },
+  { finaltime: "365d" }        // optional: retention, group and role assignment
+);
+```
+
+Method parameters are typed, including the option objects (`UserOptions`, `FileOptions`, `LegalBasisOptions` and so on), so wrong argument shapes fail at compile time.
+
+Responses are returned as `any`, because the fields a call returns depend on the caller's [policy](/pro/administration/access-control) — masked fields are either `"***"` or absent entirely. Declare the shape you expect at the call site:
+
+```typescript
+interface UserRecord {
+  status: string;
+  token: string;
+  profile?: {
+    email?: string;
+    name?: string;
+  };
+}
+
+const user: UserRecord = await api.createUser({ email: "jane@example.com" });
+
+if (user.profile?.email) {
+  console.log(user.profile.email);
+}
+```
+
+<Tip>
+Mark every profile field optional in your own interfaces. A field the caller is not authorised to read is omitted from the response rather than returned empty, so non-optional fields will lie to you at runtime.
+</Tip>
+</Tab>
+
+<Tab title="Python">
+```bash
+pip install databunkerpro
+```
+
+Requires Python 3.7 or later.
+
+```python
+from databunkerpro import DatabunkerproAPI
+
+api = DatabunkerproAPI(
+    base_url="https://your-databunker-instance.com",
+    x_bunker_token="YOUR_ACCESS_TOKEN",
+)
+
+user = api.create_user({"email": "jane@example.com", "name": "Jane"})
+print(user["token"])
+```
+</Tab>
+
+<Tab title="PHP">
+```bash
+composer require securitybunker/databunkerpro-php
+```
+
+Requires PHP 7.3 or later, with the `curl` and `json` extensions.
+
+```php
+use DatabunkerPro\DatabunkerproApi;
+
+$api = new DatabunkerproApi(
+    'https://your-databunker-instance.com',
+    'YOUR_ACCESS_TOKEN'
+);
+
+$user = $api->createUser(['email' => 'jane@example.com', 'name' => 'Jane']);
+echo $user['token'];
+```
+</Tab>
+
+<Tab title="Java">
+The Java client is published to **GitHub Packages** and **JitPack** rather than Maven Central. GitHub Packages requires authentication, so JitPack is usually the simpler route:
+
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependency>
+    <groupId>com.github.securitybunker</groupId>
+    <artifactId>databunkerpro-java</artifactId>
+    <version>v1.1.0</version>
+</dependency>
+```
+
+```java
+DatabunkerproApi api = new DatabunkerproApi(
+    "https://your-databunker-instance.com",
+    "YOUR_ACCESS_TOKEN",
+    null   // tenant name, multi-tenant deployments only
+);
+
+Map<String, Object> profile = new HashMap<>();
+profile.put("email", "jane@example.com");
+profile.put("name", "Jane");
+
+Map<String, Object> user = api.createUser(profile, null, null);
+System.out.println(user.get("token"));
+```
+
+Optional arguments have no defaults in Java, so pass `null` for the options and request-metadata parameters when you do not need them. Options are built with the typed builders — `UserOptions`, `FileOptions`, `BasicOptions`:
+
+```java
+UserOptions options = UserOptions.builder().finaltime("365d").build();
+Map<String, Object> user = api.createUser(profile, options, null);
+```
+</Tab>
+</Tabs>
+
+<Note>
+The third constructor argument on every SDK is the tenant name, used only in [multi-tenant](/pro/administration/multi-tenancy) deployments. Leave it empty or `null` otherwise.
+</Note>
+
+## Source repositories
 
 <Columns cols={2}>
 <Card
@@ -32,3 +207,15 @@ Every SDK below needs a running instance to talk to. The fastest way to get one 
   href="https://github.com/securitybunker/databunkerpro-java"
 ></Card>
 </Columns>
+
+## Choosing between the SDK and raw HTTP
+
+The SDKs are thin — they handle authentication headers, request shaping and error propagation, and nothing else. There is no local caching, no retry logic and no connection pooling beyond what the underlying HTTP client provides. If you already have a hardened HTTP layer, calling the [REST API](/pro/api/overview) directly is a perfectly reasonable choice.
+
+What the SDKs do save you is the per-endpoint request shaping, which is where most integration bugs come from: knowing that `mode` and `identity` travel together, that bulk endpoints need an [unlock uuid](/pro/api/authentication#bulk-unlock-uuid) first, and which parameters are optional.
+
+## Next steps
+
+- [Quickstart](/pro/get-started/quickstart) — get an instance running in one command
+- [Authentication](/pro/api/authentication) — issuing and scoping the tokens these clients pass
+- [API reference](/pro/api/overview) — the full endpoint list
