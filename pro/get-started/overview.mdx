@@ -6,17 +6,36 @@ description: "Databunker Pro is a self-hosted secure vault and a safer alternati
 
 That way, if someone breaches your system, they can’t get the real data, and you stay compliant with GDPR, CCPA, HIPAA, etc., using a simple API.
 
+## The Big Problem with Traditional Database Encryption
+
+Traditional database encryption solutions often provide a false sense of security. While they may encrypt data at rest, they leave critical vulnerabilities:
+
+- **Encryption alone isn’t enough:** Most vendors offer disk-block encryption, ignoring API-level encryption
+- **Vulnerable GraphQL Queries:** Unfiltered queries can expose unencrypted data to attackers
+- **SQL Injection Risks:** Attackers can retrieve plaintext data through SQL injections
+
+Databunker Pro addresses these gaps with a secure, developer-focused solution for personal data tokenization and storage.
+
 Some of Databunker Pro's enterprise security features:
 
-- [Fuzzy search](/pro/concepts/fuzzy-search)
-- [Multi-tenancy](/pro/administration/multi-tenancy)
-- [Key rotation](/pro/administration/key-rotation)
-- [File Vault](/pro/concepts/file-vault)
-- [Record versioning](/pro/concepts/record-versioning)
-- [Shamir's secret sharing](/pro/administration/shamir-keys)
-- [Advanced access control](/pro/administration/access-control)
-- [Format-preserving tokenization](/pro/concepts/tokenization)
-- [Multi-jurisdiction deployment](/pro/concepts/global-deployment)
+- [Fuzzy search](/pro/concepts/fuzzy-search) — find a record from a misspelled name or partial email
+- [Multi-tenancy](/pro/administration/multi-tenancy) — isolate customers at the database level
+- [Key rotation](/pro/administration/key-rotation) — replace the wrapping key without re-encrypting the vault
+- [File Vault](/pro/concepts/file-vault) — store passports and contracts encrypted per user
+- [Record versioning](/pro/concepts/record-versioning) — keep the full history of every profile change
+- [Shamir's secret sharing](/pro/administration/shamir-keys) — split the recovery key so no one person holds it
+- [Advanced access control](/pro/administration/access-control) — scope a token to one app, group, or document type
+- [Format-preserving tokenization](/pro/concepts/tokenization) — tokens that keep the shape of a card number
+- [Multi-jurisdiction deployment](/pro/concepts/global-deployment) — keep each region's data in its own vault
+
+## How It Works
+
+1. Store sensitive data in Databunker Pro via API calls
+2. Receive UUID tokens to reference data securely in your application
+3. Query data using secure, hash-based indexing
+4. Benefit from built-in protections against injections and bulk data leaks
+
+![Pseudonymized identity](/pro/get-started/databunker-short-diagram.png)
 
 ## Compare Databunker Pro with popular tools
 
