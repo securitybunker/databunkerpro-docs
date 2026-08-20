@@ -135,7 +135,7 @@ The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) ar
 ### What it costs you
 
 - **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
-- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens`.
+- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens` — or give each token an expiry, as below.
 - **Groups do not apply.** Every group endpoint identifies its member by `mode` and `identity` — a *user*. A standalone token cannot be put in a group, so you cannot organise or query tokenized values that way.
 - No indexed lookup, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
 
@@ -180,6 +180,54 @@ Add `appname` to share fields from one of the user's app data records instead of
 Shared records work on **user records only**. There is no equivalent for a standalone `TokenCreate` token, so a field you move out of the profile into its own token can no longer be shared this way. Decide this before you tokenize.
 </Warning>
 
+## Expire data automatically
+
+Neither option obliges you to delete anything by hand. Both `UserCreate` and
+`TokenCreate` — and their bulk forms — accept an expiry at creation, after which the
+record is gone without a call from you.
+
+Two parameters, usable together:
+
+| Parameter | Meaning |
+| --- | --- |
+| `finaltime` | An absolute lifetime. The record is removed once it elapses, however often it was used. |
+| `slidingtime` | A window that restarts on every access. Records that stop being used expire; active ones stay. |
+
+```bash
+# a profile kept for a year, or 90 days after it was last touched
+curl -X POST https://your-databunker/v2/UserCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile": { "email": "jane@example.com", "first": "Jane" },
+    "finaltime": "1y",
+    "slidingtime": "90d"
+  }'
+```
+
+```bash
+# a card token that disappears after 30 days
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokentype": "creditcard",
+    "record": "4532015112830366",
+    "unique": true,
+    "finaltime": "30d"
+  }'
+```
+
+Afterwards an expired profile reports `The user record has expired` and an expired
+token reports `Token not found`. Indexed lookups stop resolving as well.
+
+The same two parameters apply to `FileCreate`, `SessionUpsert` and the `XTokenCreate`
+calls; `SharedRecordCreate` and `AgreementAccept` take `finaltime` only.
+
+<Note>
+Expiry is the practical answer to the tracking problem in option 2. A standalone token is invisible to `UserDelete`, but a token created with `finaltime` removes itself, so a retention limit does not depend on your bookkeeping being right. Give every per-field token an expiry unless you have a reason not to.
+</Note>
+
 ## Choosing
 
 | | Whole profile | Per-field tokens |
@@ -187,7 +235,7 @@ Shared records work on **user records only**. There is no equivalent for a stand
 | What your application stores | one UUID for the whole profile | one token per value — `creditcard` also returns a Luhn-valid look-alike |
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
-| Erasure | `UserDelete` | you track and delete each token |
+| Erasure | `UserDelete`, or an expiry set at creation | an expiry set at creation, or you track and delete each token |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
 | A value two users share | stored on each profile | one token for both, with `unique` |
 
