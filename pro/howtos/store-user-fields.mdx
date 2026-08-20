@@ -50,14 +50,17 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 ### What you get
 
 - **Indexed lookup** by `email`, `phone`, `login` and `custom`, using secure hashed indexes.
-- **One licensed record** per user, however many fields it holds. A card stored inside the profile is not metered separately.
+- **App data** for fields that do not belong in the profile. `AppdataCreate` attaches a named JSON record to the user — `"appname": "billing"`, `"appname": "preferences"` — kept separate from the profile and readable on its own with `AppdataGet`. A user can have as many as you need.
+- **Group membership.** `GroupAddUser` puts the user in a group, so you can organise users and scope [access-control policies](/pro/administration/access-control) to a group rather than to individuals.
+- **One licensed record** per user, however many fields it holds. App data, consents, sessions and the full version history are all included in that one record, and a card stored inside the profile is not metered separately.
 - **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data.
 - Everything else keyed to a user token: [shared records](/pro/concepts/shared-records), [record versioning](/pro/concepts/record-versioning), consent agreements, data-subject requests, and a per-user audit trail.
 
 ### What it costs you
 
+- **The four indexed fields must be unique.** `email`, `phone`, `login` and `custom` are what makes lookup possible, and no two users can share a value in any of them — a second `UserCreate` with an email already in use fails with `Duplicate index: email`. Two family members sharing one phone number cannot both carry it in `phone`; keep the shared value in an ordinary field, which has no such constraint.
 - The record is **all or nothing**. Anyone who can call `UserGet` sees every field, unless you restrict them with an [access-control policy](/pro/administration/access-control).
-- Repeated values are not deduplicated. Two users at the same address store that address twice.
+- Repeated values are stored per user. Two users at the same address store that address twice.
 
 ## Option 2 — Tokenize individual fields
 
@@ -161,7 +164,6 @@ Hand the `recorduuid` to the consumer. Retrieving it needs **no `X-Bunker-Token`
 
 ```bash
 curl -X POST https://your-databunker/v2/SharedRecordGet \
-  -H "X-Bunker-Tenant: YOUR_TENANT" \
   -H "Content-Type: application/json" \
   -d '{"recorduuid":"a9ad8567-d6ce-9363-88f3-1f3161515c50"}'
 ```
@@ -172,9 +174,7 @@ curl -X POST https://your-databunker/v2/SharedRecordGet \
 
 Only the field named in `fields` comes back. After `finaltime` the UUID stops resolving on its own, with no cleanup call. `partner` tags every retrieval in the audit trail. Repeat the call once per field to hand different fields to different consumers, each with its own expiry.
 
-<Note>
-`X-Bunker-Tenant` is still required — without it the request cannot be routed and every UUID returns 404. That is addressing, not authentication.
-</Note>
+Add `appname` to share fields from one of the user's app data records instead of the profile.
 
 <Warning>
 Shared records work on **user records only**. There is no equivalent for a standalone `TokenCreate` token, so a field you move out of the profile into its own token can no longer be shared this way. Decide this before you tokenize.
@@ -184,12 +184,12 @@ Shared records work on **user records only**. There is no equivalent for a stand
 
 | | Whole profile | Per-field tokens |
 | --- | --- | --- |
+| What your application stores | one UUID for the whole profile | one token per value — `creditcard` also returns a Luhn-valid look-alike |
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
 | Erasure | `UserDelete` | you track and delete each token |
-| Shared records, versioning, agreements, audit | yes | no |
-| Deduplicate repeated values | no | yes, with `unique` |
-| Format-preserving output | no | 4 of 8 token types |
+| Groups, app data, shared records, versioning, agreements, audit | yes | no |
+| A value two users share | stored on each profile | one token for both, with `unique` |
 
 **Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
 
