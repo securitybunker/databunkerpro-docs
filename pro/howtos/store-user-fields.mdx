@@ -74,7 +74,7 @@ curl -X POST https://your-databunker/v2/TokenCreate \
   -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "tokentype": "text",
+    "tokentype": "string",
     "record": "Jane Doe",
     "unique": true
   }'
@@ -87,7 +87,7 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 }
 ```
 
-`text` is the string type — `string` is accepted as an alias for it. Names, addresses, dates and free text all go through it.
+Names, addresses, dates, identifiers and free text all go through `string`. It is stored under the canonical type name `text`, which `TokenGet` reports back and which you may also send instead.
 
 There is no `tokenbase`: a string has no format to preserve, so you get a UUID and nothing else. Store the `tokenuuid` in place of the name and detokenize it with `TokenGet`.
 
@@ -130,14 +130,14 @@ The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) ar
 
 - **Value-level granularity.** A card number can live in a PCI-scoped system while the rest of the profile does not.
 - **Deduplication** across the whole vault with `unique`.
-- **Format preservation** for the types listed above, so legacy schemas and validators keep working.
+- **Format preservation** for `creditcard`, so legacy schemas and card validators keep working.
 
 ### What it costs you
 
 - **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
-- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens` — or give each token an expiry, as below.
+- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. Nothing links a token back to its user, and there is no index to search, so you must record the mapping yourself and delete with `TokenDelete` or `BulkDeleteTokens` — or give each token an expiry, as below. Lose the mapping and only an expiry will ever remove the value.
 - **Groups do not apply.** Every group endpoint identifies its member by `mode` and `identity` — a *user*. A standalone token cannot be put in a group, so you cannot organise or query tokenized values that way.
-- No indexed lookup, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
+- No indexed lookup, no app data, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
 
 ## Share a single field, without a credential
 
