@@ -60,7 +60,7 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 
 - **The four indexed fields must be unique.** `email`, `phone`, `login` and `custom` are what makes lookup possible, and no two users can share a value in any of them — a second `UserCreate` with an email already in use fails with `Duplicate index: email`. Two family members sharing one phone number cannot both carry it in `phone`; keep the shared value in an ordinary field, which has no such constraint.
 - The record is **all or nothing**. Anyone who can call `UserGet` sees every field, unless you restrict them with an [access-control policy](/pro/administration/access-control).
-- Repeated values are stored per user, not deduplicated. Two users at the same address store that address twice.
+- Repeated values are stored per user. Two users at the same address store that address twice.
 
 ## Option 2 — Tokenize individual fields
 
@@ -188,7 +188,7 @@ Shared records work on **user records only**. There is no equivalent for a stand
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
 | Erasure | `UserDelete` | you track and delete each token |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
-| Deduplicate repeated values | no | yes, with `unique` |
+| A value two users share | stored on each profile | one token for both, with `unique` |
 | Format-preserving output | no | `creditcard` only |
 
 **Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
