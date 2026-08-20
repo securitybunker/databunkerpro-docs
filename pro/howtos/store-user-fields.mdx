@@ -53,14 +53,13 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 - **App data** for fields that do not belong in the profile. `AppdataCreate` attaches a named JSON record to the user — `"appname": "billing"`, `"appname": "preferences"` — kept separate from the profile and readable on its own with `AppdataGet`. A user can have as many as you need.
 - **Group membership.** `GroupAddUser` puts the user in a group, so you can organise users and scope [access-control policies](/pro/administration/access-control) to a group rather than to individuals.
 - **One licensed record** per user, however many fields it holds. App data, consents, sessions and the full version history are all included in that one record, and a card stored inside the profile is not metered separately.
-- **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data.
+- **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data. `UserDeleteBulk` does the same for many users at once.
 - Everything else keyed to a user token: [shared records](/pro/concepts/shared-records), [record versioning](/pro/concepts/record-versioning), consent agreements, data-subject requests, and a per-user audit trail.
 
 ### What it costs you
 
 - **The four indexed fields must be unique.** `email`, `phone`, `login` and `custom` are what makes lookup possible, and no two users can share a value in any of them — a second `UserCreate` with an email already in use fails with `Duplicate index: email`. Two family members sharing one phone number cannot both carry it in `phone`; keep the shared value in an ordinary field, which has no such constraint.
 - The record is **all or nothing**. Anyone who can call `UserGet` sees every field, unless you restrict them with an [access-control policy](/pro/administration/access-control).
-- Repeated values are stored per user. Two users at the same address store that address twice.
 
 ## Option 2 — Tokenize individual fields
 
@@ -74,7 +73,7 @@ curl -X POST https://your-databunker/v2/TokenCreate \
   -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "tokentype": "text",
+    "tokentype": "string",
     "record": "Jane Doe",
     "unique": true
   }'
@@ -87,7 +86,7 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 }
 ```
 
-`text` is the string type — `string` is accepted as an alias for it. Names, addresses, dates and free text all go through it.
+Names, addresses, dates, identifiers and free text all go through `string`. It is stored under the canonical type name `text`, which `TokenGet` reports back and which you may also send instead.
 
 There is no `tokenbase`: a string has no format to preserve, so you get a UUID and nothing else. Store the `tokenuuid` in place of the name and detokenize it with `TokenGet`.
 
@@ -130,14 +129,15 @@ The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) ar
 
 - **Value-level granularity.** A card number can live in a PCI-scoped system while the rest of the profile does not.
 - **Deduplication** across the whole vault with `unique`.
-- **Format preservation** for the types listed above, so legacy schemas and validators keep working.
+- **Format preservation** for `creditcard`, so legacy schemas and card validators keep working.
 
 ### What it costs you
 
 - **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
-- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens`.
+- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. Nothing links a token back to its user, and there is no index to search, so you must record the mapping yourself and delete with `TokenDelete` or `BulkDeleteTokens` — or give each token an expiry, as below. Lose the mapping and only an expiry will ever remove the value.
+- **`unique` makes equal values linkable.** The same input always yields the same token, so anyone holding two records can tell they carry the same value without detokenizing either. Leave `unique` off where that inference matters — see [why shared records, not long-lived tokens](/pro/concepts/shared-records).
 - **Groups do not apply.** Every group endpoint identifies its member by `mode` and `identity` — a *user*. A standalone token cannot be put in a group, so you cannot organise or query tokenized values that way.
-- No indexed lookup, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
+- No indexed lookup, no app data, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
 
 ## Share a single field, without a credential
 
@@ -180,6 +180,54 @@ Add `appname` to share fields from one of the user's app data records instead of
 Shared records work on **user records only**. There is no equivalent for a standalone `TokenCreate` token, so a field you move out of the profile into its own token can no longer be shared this way. Decide this before you tokenize.
 </Warning>
 
+## Expire data automatically
+
+Neither option obliges you to delete anything by hand. Both `UserCreate` and
+`TokenCreate` — and their bulk forms — accept an expiry at creation, after which the
+record is gone without a call from you.
+
+Two parameters, usable together:
+
+| Parameter | Meaning |
+| --- | --- |
+| `finaltime` | An absolute lifetime. The record is removed once it elapses, however often it was used. |
+| `slidingtime` | A window that restarts on every access. Records that stop being used expire; active ones stay. |
+
+```bash
+# a profile kept for a year, or 90 days after it was last touched
+curl -X POST https://your-databunker/v2/UserCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile": { "email": "jane@example.com", "first": "Jane" },
+    "finaltime": "1y",
+    "slidingtime": "90d"
+  }'
+```
+
+```bash
+# a card token that disappears after 30 days
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokentype": "creditcard",
+    "record": "4532015112830366",
+    "unique": true,
+    "finaltime": "30d"
+  }'
+```
+
+Afterwards an expired profile reports `The user record has expired` and an expired
+token reports `Token not found`. Indexed lookups stop resolving as well.
+
+The same two parameters apply to `FileCreate`, `SessionUpsert` and the `XTokenCreate`
+calls; `SharedRecordCreate` and `AgreementAccept` take `finaltime` only.
+
+<Note>
+Expiry is the practical answer to the tracking problem in option 2. A standalone token is invisible to `UserDelete`, but a token created with `finaltime` removes itself, so a retention limit does not depend on your bookkeeping being right. Give every per-field token an expiry unless you have a reason not to.
+</Note>
+
 ## Choosing
 
 | | Whole profile | Per-field tokens |
@@ -187,9 +235,10 @@ Shared records work on **user records only**. There is no equivalent for a stand
 | What your application stores | one UUID for the whole profile | one token per value — `creditcard` also returns a Luhn-valid look-alike |
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
-| Erasure | `UserDelete` | you track and delete each token |
+| Erasure | `UserDelete` / `UserDeleteBulk`, by token or any indexed field | `TokenDelete` / `BulkDeleteTokens`, by token only — nothing links one back to its user |
+| Automatic erasure | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
-| A value two users share | stored on each profile | one token for both, with `unique` |
+| A non-indexed value two users share | stored on each profile | one token for both, with `unique` |
 
 **Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
 
