@@ -118,7 +118,9 @@ Here you get both forms. `tokenuuid` addresses the token; `tokenbase` is the for
 `unique: true` deduplicates: the same input returns the same token instead of minting a new one. Use `TokenCreateBulk` for batches, and `BulkListUnlock` plus `BulkListTokens` to detokenize many at once.
 
 <Note>
-Only `creditcard`, `unixtimestamp`, `uint32` and `uint64` produce a format-preserving `tokenbase`. The remaining types — `text` (alias: `string`), `email`, `ssn` and `uuid` — return a `tokenuuid` with an empty `tokenbase`. If you are tokenizing arbitrary strings, expect a UUID, not a look-alike value.
+Use `creditcard` and `string` — between them they cover every field. Only `creditcard` returns a format-preserving `tokenbase`; `string` returns a UUID, so do not expect a look-alike value for a name or an address.
+
+The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) are **not recommended** — they do not scale. See [format-preserving tokenization](/pro/concepts/tokenization#supported-data-types).
 </Note>
 
 ### What you get

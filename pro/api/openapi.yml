@@ -3140,8 +3140,12 @@ paths:
               properties:
                 tokentype:
                   type: string
-                  enum: [creditcard, email]
-                  description: Type of token
+                  enum: [creditcard, string, text]
+                  description: >-
+                    Type of token. Use `creditcard` for card numbers, which returns a
+                    Luhn-valid format-preserving token, or `string` (alias `text`) for
+                    any other value, which returns a UUID. Other types exist but do not
+                    scale and are not recommended.
                 record:
                   type: string
                   description: The sensitive data to tokenize
@@ -3295,8 +3299,11 @@ paths:
                     properties:
                       tokentype:
                         type: string
-                        enum: [creditcard, email]
-                        description: Type of token
+                        enum: [creditcard, string, text]
+                        description: >-
+                          Type of token. Use `creditcard` for card numbers, or `string`
+                          (alias `text`) for any other value. Other types exist but do
+                          not scale and are not recommended.
                       record:
                         type: string
                         description: The sensitive data to tokenize
