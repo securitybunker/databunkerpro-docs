@@ -1,0 +1,183 @@
+---
+title: Store user fields
+sidebarTitle: Store user fields
+description: Choose between storing a whole user profile and tokenizing individual fields, and share a single field without handing out a credential.
+---
+
+Databunker Pro can hold a user's data two ways: as **one encrypted profile** addressed by a single token, or as **individual tokenized values**, one token per field. They are not interchangeable — the choice decides which features you keep and how much the data costs to store.
+
+This guide shows both, then a third thing people often reach for when they say "per-field": exposing one field of a profile to an outside party without giving that party a credential.
+
+## Option 1 — Store the whole profile
+
+`UserCreate` encrypts the entire profile as one record and returns a UUID token.
+
+```bash
+curl -X POST https://your-databunker/v2/UserCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile": {
+      "email": "jane@example.com",
+      "phone": "+12065550100",
+      "login": "jane",
+      "custom": "legacy-4471",
+      "first": "Jane",
+      "last": "Doe",
+      "address": "1 Market Street, San Francisco, CA",
+      "dob": "1985-04-12",
+      "creditcard": "4532015112830366",
+      "ssn": "123-45-6789"
+    }
+  }'
+```
+
+```json
+{ "status": "ok", "token": "8ba70d19-a8b1-0b82-f0b9-d5952221be67" }
+```
+
+Store that token in your own database in place of every field above. Read the record back by the token or by any indexed field — `email`, `phone`, `login`, `custom`:
+
+```bash
+curl -X POST https://your-databunker/v2/UserGet \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"email","identity":"jane@example.com"}'
+```
+
+Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL users table](/pro/migrations/sql-users-table).
+
+### What you get
+
+- **Indexed lookup** by `email`, `phone`, `login` and `custom`, using secure hashed indexes.
+- **One licensed record** per user, however many fields it holds. A card stored inside the profile is not metered separately.
+- **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data.
+- Everything else keyed to a user token: [shared records](/pro/concepts/shared-records), [record versioning](/pro/concepts/record-versioning), consent agreements, data-subject requests, and a per-user audit trail.
+
+### What it costs you
+
+- The record is **all or nothing**. Anyone who can call `UserGet` sees every field, unless you restrict them with an [access-control policy](/pro/administration/access-control).
+- Repeated values are not deduplicated. Two users at the same address store that address twice.
+
+## Option 2 — Tokenize individual fields
+
+`TokenCreate` tokenizes a single value. It has no connection to any user record.
+
+```bash
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokentype": "creditcard",
+    "record": "4532015112830366",
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "tokenuuid": "106ad147-5559-fdea-a2af-1a1075f0d0f4",
+  "tokenbase": "3371363676177808"
+}
+```
+
+`tokenuuid` addresses the token; `tokenbase` is the format-preserving form — same length, still Luhn-valid, so it drops into a column that already validates card numbers. Either value detokenizes through `TokenGet`.
+
+`unique: true` deduplicates: the same input returns the same token instead of minting a new one. Use `TokenCreateBulk` for batches, and `BulkListUnlock` plus `BulkListTokens` to detokenize many at once.
+
+<Note>
+Only `creditcard`, `unixtimestamp`, `uint32` and `uint64` produce a format-preserving `tokenbase`. The remaining types — `text` (alias: `string`), `email`, `ssn` and `uuid` — return a `tokenuuid` with an empty `tokenbase`. If you are tokenizing arbitrary strings, expect a UUID, not a look-alike value.
+</Note>
+
+### What you get
+
+- **Value-level granularity.** A card number can live in a PCI-scoped system while the rest of the profile does not.
+- **Deduplication** across the whole vault with `unique`.
+- **Format preservation** for the types listed above, so legacy schemas and validators keep working.
+
+### What it costs you
+
+- **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
+- **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens`.
+- No indexed lookup, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
+
+## Share a single field, without a credential
+
+If the goal is to let an outside party read **one field** of a profile, do not tokenize that field separately — create a [shared record](/pro/concepts/shared-records) scoped to it.
+
+```bash
+curl -X POST https://your-databunker/v2/SharedRecordCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "token",
+    "identity": "8ba70d19-a8b1-0b82-f0b9-d5952221be67",
+    "fields": "email",
+    "partner": "partner-acme-billing",
+    "finaltime": "7d"
+  }'
+```
+
+```json
+{ "status": "ok", "recorduuid": "a9ad8567-d6ce-9363-88f3-1f3161515c50" }
+```
+
+Hand the `recorduuid` to the consumer. Retrieving it needs **no `X-Bunker-Token`** — that is the point, the partner never receives a vault credential:
+
+```bash
+curl -X POST https://your-databunker/v2/SharedRecordGet \
+  -H "X-Bunker-Tenant: YOUR_TENANT" \
+  -H "Content-Type: application/json" \
+  -d '{"recorduuid":"a9ad8567-d6ce-9363-88f3-1f3161515c50"}'
+```
+
+```json
+{ "status": "ok", "data": { "email": "jane@example.com" } }
+```
+
+Only the field named in `fields` comes back. After `finaltime` the UUID stops resolving on its own, with no cleanup call. `partner` tags every retrieval in the audit trail. Repeat the call once per field to hand different fields to different consumers, each with its own expiry.
+
+<Note>
+`X-Bunker-Tenant` is still required — without it the request cannot be routed and every UUID returns 404. That is addressing, not authentication.
+</Note>
+
+<Warning>
+Shared records work on **user records only**. There is no equivalent for a standalone `TokenCreate` token, so a field you move out of the profile into its own token can no longer be shared this way. Decide this before you tokenize.
+</Warning>
+
+## Choosing
+
+| | Whole profile | Per-field tokens |
+| --- | --- | --- |
+| Licensed records for 10 fields | 1 | 10 |
+| Indexed lookup | `email`, `phone`, `login`, `custom` | none |
+| Erasure | `UserDelete` | you track and delete each token |
+| Shared records, versioning, agreements, audit | yes | no |
+| Deduplicate repeated values | no | yes, with `unique` |
+| Format-preserving output | no | 4 of 8 token types |
+
+**Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
+
+**Tokenize a field on its own** when the value has to leave the user record: a card number crossing into a PCI-scoped system, or a value that must keep its original format for a legacy schema.
+
+**Mix them** for the common case. Keep the profile in the vault, and tokenize only the one high-risk field separately, storing its `tokenuuid` inside the profile:
+
+```json
+{
+  "profile": {
+    "email": "jane@example.com",
+    "first": "Jane",
+    "creditcard_token": "106ad147-5559-fdea-a2af-1a1075f0d0f4"
+  }
+}
+```
+
+Remember that the separately tokenized value is now outside the reach of `UserDelete` — delete it explicitly when erasing the user.
+
+## Related
+
+- [PII vault](/pro/get-started/pii-vault) — how whole-profile tokenization works
+- [Format-preserving tokenization](/pro/concepts/tokenization) — token types, expiration, bulk operations
+- [Shared records](/pro/concepts/shared-records) — sharing a scoped, expiring view of a record
+- [Licensing and limits](/pro/get-started/licensing#what-counts-as-a-record) — what counts as a record
