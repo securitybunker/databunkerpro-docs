@@ -87,7 +87,8 @@
                 "pages": [
                   "pro/howtos/overview",
                   "pro/howtos/update-license",
-                  "pro/howtos/clean-users-table"
+                  "pro/howtos/clean-users-table",
+                  "pro/howtos/store-user-fields"
                 ]
               },
               {
