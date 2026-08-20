@@ -53,7 +53,7 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 - **App data** for fields that do not belong in the profile. `AppdataCreate` attaches a named JSON record to the user — `"appname": "billing"`, `"appname": "preferences"` — kept separate from the profile and readable on its own with `AppdataGet`. A user can have as many as you need.
 - **Group membership.** `GroupAddUser` puts the user in a group, so you can organise users and scope [access-control policies](/pro/administration/access-control) to a group rather than to individuals.
 - **One licensed record** per user, however many fields it holds. App data, consents, sessions and the full version history are all included in that one record, and a card stored inside the profile is not metered separately.
-- **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data.
+- **Erasure in one call.** `UserDelete` wipes the profile; the token remains as an empty shell, lookups by email stop resolving, and anything derived from the profile stops returning data. `UserDeleteBulk` does the same for many users at once.
 - Everything else keyed to a user token: [shared records](/pro/concepts/shared-records), [record versioning](/pro/concepts/record-versioning), consent agreements, data-subject requests, and a per-user audit trail.
 
 ### What it costs you
@@ -235,7 +235,7 @@ Expiry is the practical answer to the tracking problem in option 2. A standalone
 | What your application stores | one UUID for the whole profile | one token per value — `creditcard` also returns a Luhn-valid look-alike |
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
-| Erasure | `UserDelete` | `TokenDelete` / `BulkDeleteTokens`, on tokens you tracked yourself |
+| Erasure | `UserDelete` / `UserDeleteBulk` | `TokenDelete` / `BulkDeleteTokens`, on tokens you tracked yourself |
 | Automatic expiration | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
 | A value two users share | stored on each profile | one token for both, with `unique` |
