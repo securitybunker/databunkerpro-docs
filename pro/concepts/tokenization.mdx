@@ -6,7 +6,7 @@ sidebarTitle: Tokenization
 Databunker Pro provides **two distinct tokenization engines**, each designed for a different job:
 
 - **PII tokenization** (`UserCreate` / `UserGet`) — stores a complete user profile (JSON, N fields) as one encrypted record and returns a single UUID token representing the whole profile. Builds secure hashed search indexes over `email`, `phone`, `login`, and a `custom` field for efficient lookups. This is the *user-table replacement* pattern; see the [PII Vault](/pro/get-started/pii-vault) page for full detail.
-- **Format-preserving tokenization** (`TokenCreate` / `TokenGet`) — tokenizes individual sensitive values such as `credit-card numbers` (Luhn-valid) and Unix timestamps. Returns both a UUID and a format-preserving token in the same response. This is the *PCI / single-value* pattern, covered in the rest of this page.
+- **Format-preserving tokenization** (`TokenCreate` / `TokenGet`) — tokenizes individual sensitive values: a `creditcard`, which returns a Luhn-valid look-alike alongside a UUID, or a `string`, which returns a UUID. This is the *PCI / single-value* pattern, covered in the rest of this page.
 
 Both engines share the same vault, encryption, multi-tenancy, and access-control layers — so the same auditability, key management, and CRBAC policies apply to either flow.
 
@@ -14,11 +14,24 @@ Databunker Pro was built with the latest data privacy requirements in mind, such
 
 ## Supported data types
 
-| Original Record Type  | Format Preservation  | Generated Token Format          |
-| --------------------- | -------------------- | ------------------------------- |
-| Credit Card Number    | ✅ (with Luhn check) | Format-preserving or UUID token |
-| Unix timestamp record | ✅                   | Format-preserving or UUID token |
-| Text string           | ❌                   | UUID token                      |
+Two token types are recommended, and they cover almost every case:
+
+| `tokentype` | Original Record Type | Format Preservation | Generated Token Format |
+| --- | --- | --- | --- |
+| `creditcard` | Credit card number | ✅ (with Luhn check) | Format-preserving token plus a UUID |
+| `string` | Any text — name, address, date, email, identifier | ❌ | UUID token |
+
+`string` is an alias for the canonical type name `text`; both are accepted and both
+store the value as `text`.
+
+<Warning>
+Other token types exist — `unixtimestamp`, `uint32`, `uint64`, `email`, `ssn` and
+`uuid` — but they are **not recommended**. The numeric types generate their
+format-preserving token by drawing a random value and rejecting collisions, and their
+keyspace is small. At hundreds of millions of records the generator spends longer and
+longer looking for a free value, until requests slow down or fail outright with
+`Not enough random tokens`. Use `creditcard` and `string`.
+</Warning>
 
 ## Key features
 

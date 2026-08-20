@@ -61,7 +61,35 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 
 ## Option 2 — Tokenize individual fields
 
-`TokenCreate` tokenizes a single value. It has no connection to any user record.
+`TokenCreate` tokenizes a single value. It has no connection to any user record. What comes back depends on the `tokentype`:
+
+<Tabs>
+<Tab title="A string — user name">
+
+```bash
+curl -X POST https://your-databunker/v2/TokenCreate \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokentype": "text",
+    "record": "Jane Doe",
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "tokenuuid": "a07d6340-2b45-ee79-98a5-e5c737966b3c"
+}
+```
+
+`text` is the string type — `string` is accepted as an alias for it. Names, addresses, dates and free text all go through it.
+
+There is no `tokenbase`: a string has no format to preserve, so you get a UUID and nothing else. Store the `tokenuuid` in place of the name and detokenize it with `TokenGet`.
+
+</Tab>
+<Tab title="A credit card">
 
 ```bash
 curl -X POST https://your-databunker/v2/TokenCreate \
@@ -82,12 +110,17 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 }
 ```
 
-`tokenuuid` addresses the token; `tokenbase` is the format-preserving form — same length, still Luhn-valid, so it drops into a column that already validates card numbers. Either value detokenizes through `TokenGet`.
+Here you get both forms. `tokenuuid` addresses the token; `tokenbase` is the format-preserving one — same length, still Luhn-valid, so it drops into a column that already validates card numbers. Either value detokenizes through `TokenGet`.
+
+</Tab>
+</Tabs>
 
 `unique: true` deduplicates: the same input returns the same token instead of minting a new one. Use `TokenCreateBulk` for batches, and `BulkListUnlock` plus `BulkListTokens` to detokenize many at once.
 
 <Note>
-Only `creditcard`, `unixtimestamp`, `uint32` and `uint64` produce a format-preserving `tokenbase`. The remaining types — `text` (alias: `string`), `email`, `ssn` and `uuid` — return a `tokenuuid` with an empty `tokenbase`. If you are tokenizing arbitrary strings, expect a UUID, not a look-alike value.
+Use `creditcard` and `string` — between them they cover every field. Only `creditcard` returns a format-preserving `tokenbase`; `string` returns a UUID, so do not expect a look-alike value for a name or an address.
+
+The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) are **not recommended** — they do not scale. See [format-preserving tokenization](/pro/concepts/tokenization#supported-data-types).
 </Note>
 
 ### What you get
@@ -100,6 +133,7 @@ Only `creditcard`, `unixtimestamp`, `uint32` and `uint64` produce a format-prese
 
 - **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
 - **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. You must record which tokens belong to which user and delete them yourself with `TokenDelete` or `BulkDeleteTokens`.
+- **Groups do not apply.** Every group endpoint identifies its member by `mode` and `identity` — a *user*. A standalone token cannot be put in a group, so you cannot organise or query tokenized values that way.
 - No indexed lookup, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
 
 ## Share a single field, without a credential
