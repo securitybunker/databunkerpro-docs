@@ -60,7 +60,6 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 
 - **The four indexed fields must be unique.** `email`, `phone`, `login` and `custom` are what makes lookup possible, and no two users can share a value in any of them — a second `UserCreate` with an email already in use fails with `Duplicate index: email`. Two family members sharing one phone number cannot both carry it in `phone`; keep the shared value in an ordinary field, which has no such constraint.
 - The record is **all or nothing**. Anyone who can call `UserGet` sees every field, unless you restrict them with an [access-control policy](/pro/administration/access-control).
-- Repeated values are stored per user. Two users at the same address store that address twice.
 
 ## Option 2 — Tokenize individual fields
 
@@ -136,6 +135,7 @@ The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) ar
 
 - **Each token is a licensed record.** Ten fields tokenized individually is ten records, where the same ten fields inside a profile is one. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
 - **Erasure is yours to manage.** The `tokens` table is not keyed by user token, so `UserDelete` does not touch these tokens and a data-subject erasure request will not reach them. Nothing links a token back to its user, and there is no index to search, so you must record the mapping yourself and delete with `TokenDelete` or `BulkDeleteTokens` — or give each token an expiry, as below. Lose the mapping and only an expiry will ever remove the value.
+- **`unique` makes equal values linkable.** The same input always yields the same token, so anyone holding two records can tell they carry the same value without detokenizing either. Leave `unique` off where that inference matters — see [why shared records, not long-lived tokens](/pro/concepts/shared-records).
 - **Groups do not apply.** Every group endpoint identifies its member by `mode` and `identity` — a *user*. A standalone token cannot be put in a group, so you cannot organise or query tokenized values that way.
 - No indexed lookup, no app data, no versioning, no agreements, no per-user audit trail — those all hang off a user record.
 
