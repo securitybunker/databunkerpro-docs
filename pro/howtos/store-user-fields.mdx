@@ -323,7 +323,7 @@ Expiry is the practical answer to the tracking problem in option 2. A standalone
 | Erasure | `UserDelete` / `UserDeleteBulk`, by token or any indexed field | `TokenDelete` / `BulkDeleteTokens`, by token only — nothing links one back to the user's profile |
 | Automatic record expiration | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
-| The same address on two users | stored on each profile | one token for both, with `unique` |
+| The same address on two users | stored on each user profile | one token for both, with `unique` |
 
 **Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
 
