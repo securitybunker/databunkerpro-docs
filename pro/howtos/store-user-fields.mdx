@@ -63,7 +63,7 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 
 ## Option 2 — Tokenize individual fields
 
-`TokenCreate` tokenizes a single value. It has no connection to any user record. What comes back depends on the `tokentype`:
+`TokenCreate` tokenizes one value, `TokenCreateBulk` a whole batch. Neither has any connection to a user record, and what comes back depends on the `tokentype`:
 
 <Tabs>
 <Tab title="A string — user name">
@@ -115,15 +115,100 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 Here you get both forms. `tokenuuid` addresses the token; `tokenbase` is the format-preserving one — same length, still Luhn-valid, so it drops into a column that already validates card numbers. Either value detokenizes through `TokenGet`.
 
 </Tab>
+<Tab title="Both, in one batch">
+
+`TokenCreateBulk` takes an array of records and may mix types freely, so a whole
+profile goes across in one call. `unique` applies to the batch.
+
+```bash
+curl -X POST https://your-databunker/v2/TokenCreateBulk \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+      { "tokentype": "string",     "record": "Jane Doe" },
+      { "tokentype": "string",     "record": "1 Market Street, San Francisco, CA" },
+      { "tokentype": "creditcard", "record": "4532015112830366" },
+      { "tokentype": "creditcard", "record": "5467047429390590" }
+    ],
+    "unique": true
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "created": [
+    { "record": "Jane Doe", "tokentype": "text", "tokenbase": "",
+      "tokenuuid": "89c8c648-a3ca-98ec-9e29-502140c64aaf" },
+    { "record": "1 Market Street, San Francisco, CA", "tokentype": "text", "tokenbase": "",
+      "tokenuuid": "77216530-3981-b814-9ea3-c3922dfe0502" },
+    { "record": "4532015112830366", "tokentype": "creditcard", "tokenbase": "7219729206681484",
+      "tokenuuid": "87cc52c7-b538-3186-1ff0-fe058c33d5f4" },
+    { "record": "5467047429390590", "tokentype": "creditcard", "tokenbase": "9162147674613009",
+      "tokenuuid": "e9cc9ca7-bcca-abeb-2196-5af0814be7b4" }
+  ],
+  "summary": { "created": 4, "duplicates": 0, "errors": 0, "total": 4 }
+}
+```
+
+Each record comes back with the value it came from, so you can map the tokens onto your
+own columns. The `string` rows report `text`, the canonical type name, and carry an
+empty `tokenbase`; only the cards get a format-preserving one.
+
+Send the same batch again with `unique` and nothing new is minted — the four move from
+`created` to `duplicates`, carrying the tokens issued the first time:
+
+```json
+{ "summary": { "created": 0, "duplicates": 4, "errors": 0, "total": 4 } }
+```
+
+</Tab>
 </Tabs>
 
-`unique: true` deduplicates: the same input returns the same token instead of minting a new one. Use `TokenCreateBulk` for batches, and `BulkListUnlock` plus `BulkListTokens` to detokenize many at once.
+`unique: true` deduplicates: the same input returns the same token instead of minting a new one.
 
 <Note>
 Use `creditcard` and `string` — between them they cover every field. Only `creditcard` returns a format-preserving `tokenbase`; `string` returns a UUID, so do not expect a look-alike value for a name or an address.
 
 The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) are **not recommended** — they do not scale. See [format-preserving tokenization](/pro/concepts/tokenization#supported-data-types).
 </Note>
+
+### Read a batch back
+
+Bulk detokenization returns plaintext for many records at once, so it takes a
+short-lived unlock UUID as a second authorization step. Call `BulkListUnlock` first,
+then pass the `unlockuuid` to `BulkListTokens` with the tokens you want:
+
+```bash
+curl -X POST https://your-databunker/v2/BulkListUnlock \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN"
+# -> { "status": "ok", "unlockuuid": "289f9b87-a8f3-d6ae-442c-eb06c2938652" }
+
+curl -X POST https://your-databunker/v2/BulkListTokens \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unlockuuid": "289f9b87-a8f3-d6ae-442c-eb06c2938652",
+    "tokens": ["89c8c648-a3ca-98ec-9e29-502140c64aaf", "87cc52c7-b538-3186-1ff0-fe058c33d5f4"]
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "total": 2,
+  "rows": [
+    { "tokenuuid": "89c8c648-a3ca-98ec-9e29-502140c64aaf", "record": "Jane Doe",
+      "tokentype": "text", "creationtime": 1787317854, "finaltime": 0, "slidingtime": 0 },
+    { "tokenuuid": "87cc52c7-b538-3186-1ff0-fe058c33d5f4", "record": "4532015112830366",
+      "tokentype": "creditcard", "tokenbase": "9899464476958601",
+      "creationtime": 1787317854, "finaltime": 0, "slidingtime": 0 }
+  ]
+}
+```
+
+`BulkDeleteTokens` takes the same `unlockuuid` and token list to erase them.
 
 ### What you get
 
@@ -236,9 +321,9 @@ Expiry is the practical answer to the tracking problem in option 2. A standalone
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
 | Erasure | `UserDelete` / `UserDeleteBulk`, by token or any indexed field | `TokenDelete` / `BulkDeleteTokens`, by token only — nothing links one back to the user's profile |
-| Automatic erasure | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
+| Automatic record expiration | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
-| A non-indexed value two users share | stored on each profile | one token for both, with `unique` |
+| The same address on two users | stored on each user profile | one token for both, with `unique` |
 
 **Store the whole profile** for anything that is a user — it is the cheaper, more capable default, and it is what the [PII vault](/pro/get-started/pii-vault) is for.
 
