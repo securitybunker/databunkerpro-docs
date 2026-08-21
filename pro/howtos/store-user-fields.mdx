@@ -321,7 +321,7 @@ Expiry is the practical answer to the tracking problem in option 2. A standalone
 | Licensed records for 10 fields | 1 | 10 |
 | Indexed lookup | `email`, `phone`, `login`, `custom` | none |
 | Erasure | `UserDelete` / `UserDeleteBulk`, by token or any indexed field | `TokenDelete` / `BulkDeleteTokens`, by token only — nothing links one back to the user's profile |
-| Automatic erasure | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
+| Automatic record expiration | `finaltime`, `slidingtime` | `finaltime`, `slidingtime` |
 | Groups, app data, shared records, versioning, agreements, audit | yes | no |
 | A non-indexed value two users share | stored on each profile | one token for both, with `unique` |
 
