@@ -63,7 +63,7 @@ Use `UserCreateBulk` to load many profiles in one call — see [Migrating a SQL 
 
 ## Option 2 — Tokenize individual fields
 
-`TokenCreate` tokenizes a single value. It has no connection to any user record. What comes back depends on the `tokentype`:
+`TokenCreate` tokenizes one value, `TokenCreateBulk` a whole batch. Neither has any connection to a user record, and what comes back depends on the `tokentype`:
 
 <Tabs>
 <Tab title="A string — user name">
@@ -115,17 +115,7 @@ curl -X POST https://your-databunker/v2/TokenCreate \
 Here you get both forms. `tokenuuid` addresses the token; `tokenbase` is the format-preserving one — same length, still Luhn-valid, so it drops into a column that already validates card numbers. Either value detokenizes through `TokenGet`.
 
 </Tab>
-</Tabs>
-
-`unique: true` deduplicates: the same input returns the same token instead of minting a new one.
-
-<Note>
-Use `creditcard` and `string` — between them they cover every field. Only `creditcard` returns a format-preserving `tokenbase`; `string` returns a UUID, so do not expect a look-alike value for a name or an address.
-
-The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) are **not recommended** — they do not scale. See [format-preserving tokenization](/pro/concepts/tokenization#supported-data-types).
-</Note>
-
-### Tokenize a batch
+<Tab title="Both, in one batch">
 
 `TokenCreateBulk` takes an array of records and may mix types freely, so a whole
 profile goes across in one call. `unique` applies to the batch.
@@ -172,6 +162,17 @@ Send the same batch again with `unique` and nothing new is minted — the four m
 ```json
 { "summary": { "created": 0, "duplicates": 4, "errors": 0, "total": 4 } }
 ```
+
+</Tab>
+</Tabs>
+
+`unique: true` deduplicates: the same input returns the same token instead of minting a new one.
+
+<Note>
+Use `creditcard` and `string` — between them they cover every field. Only `creditcard` returns a format-preserving `tokenbase`; `string` returns a UUID, so do not expect a look-alike value for a name or an address.
+
+The other types (`unixtimestamp`, `uint32`, `uint64`, `email`, `ssn`, `uuid`) are **not recommended** — they do not scale. See [format-preserving tokenization](/pro/concepts/tokenization#supported-data-types).
+</Note>
 
 ### Read a batch back
 
