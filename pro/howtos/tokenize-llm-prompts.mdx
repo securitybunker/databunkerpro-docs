@@ -8,11 +8,51 @@ A prompt sent to a hosted model leaves your infrastructure. So does the retrieve
 
 Tokenization removes the personal data before the call and puts it back afterwards. The model reasons over placeholders; the plaintext never leaves the vault.
 
+## What it looks like
+
+Say your application builds this prompt:
+
+```
+Draft a reply to the customer at sarah.chen@example.com about the disputed
+$420 charge on card 4532015112830366. Their phone on file is +1 415-555-0142
+and their SSN is 123-45-6789.
+```
+
+Four pieces of personal data, all of which would be handed to the model provider as written. This is what reaches the model instead:
+
+```
+Draft a reply to the customer at [EMAIL:cfd20fe2-8872-d109-780b-5bcadb96ebd0]
+about the disputed $420 charge on card [CARD:600c5f6d-a18d-1f01-da05-4a5c3ee5ac24].
+Their phone on file is [PHONE:dce7e4f4-4aeb-231c-daaf-2efd7bd2ae71] and their
+SSN is [SSN:b6c14fa6-715f-ee1d-aede-9dad4059da03].
+```
+
+The task survives the substitution. The model can still see that there is an email address, a card, a phone number and a national ID, and which is which — everything it needs to draft the reply, and none of the values. So it answers in the same terms:
+
+```
+I've emailed [EMAIL:cfd20fe2-8872-d109-780b-5bcadb96ebd0] to confirm, and the
+$420 charge on card [CARD:600c5f6d-a18d-1f01-da05-4a5c3ee5ac24] will be reversed
+within 3 business days.
+```
+
+Your application swaps the real values back before that answer goes anywhere:
+
+```
+I've emailed sarah.chen@example.com to confirm, and the $420 charge on card
+4532015112830366 will be reversed within 3 business days.
+```
+
+The customer gets a correct, personalized reply. The model provider never held a single personal value.
+
+## How it works
+
 ```
 prompt ──▶ find PII ──▶ TokenCreateBulk ──▶ prompt with tokens ──▶ model
-                                                                      │
+                                                                     │
  answer ◀── BulkListTokens ◀── reply with tokens ◀───────────────────┘
 ```
+
+Each placeholder is a label and a token: the label says what kind of value it stands for, the token is a UUID the vault can resolve back to the original. The rest of this guide builds that in four steps.
 
 This guide uses [demo mode](/pro/get-started/quickstart) — one `docker run`, root token `DEMO` — so every call below is runnable as written.
 
@@ -101,13 +141,13 @@ curl -X POST http://localhost:3000/v2/TokenCreateBulk \
   "status": "ok",
   "created": [
     { "record": "sarah.chen@example.com", "tokentype": "text", "tokenbase": "",
-      "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c" },
+      "tokenuuid": "cfd20fe2-8872-d109-780b-5bcadb96ebd0" },
     { "record": "+1 415-555-0142", "tokentype": "text", "tokenbase": "",
-      "tokenuuid": "d623a7f6-b535-a9c3-8c9d-4eea60d68149" },
-    { "record": "4532015112830366", "tokentype": "creditcard", "tokenbase": "1200691873157434",
-      "tokenuuid": "4ca02ed1-a283-e6d1-736c-b43fb3cda51f" },
+      "tokenuuid": "dce7e4f4-4aeb-231c-daaf-2efd7bd2ae71" },
+    { "record": "4532015112830366", "tokentype": "creditcard", "tokenbase": "6372210073800049",
+      "tokenuuid": "600c5f6d-a18d-1f01-da05-4a5c3ee5ac24" },
     { "record": "123-45-6789", "tokentype": "text", "tokenbase": "",
-      "tokenuuid": "6e215cb0-efcd-55d1-1ce9-dcf156d8a380" }
+      "tokenuuid": "b6c14fa6-715f-ee1d-aede-9dad4059da03" }
   ],
   "num": 4,
   "summary": { "created": 4, "duplicates": 0, "errors": 0, "total": 4 }
@@ -119,10 +159,10 @@ Each row echoes the `record` it came from, which is what lets you map tokens bac
 Which gives the placeholders the prompt is built from:
 
 ```
-[EMAIL:1d9b1854-45a0-3691-7454-982e1079291c]
-[PHONE:d623a7f6-b535-a9c3-8c9d-4eea60d68149]
-[CARD:4ca02ed1-a283-e6d1-736c-b43fb3cda51f]
-[SSN:6e215cb0-efcd-55d1-1ce9-dcf156d8a380]
+[EMAIL:cfd20fe2-8872-d109-780b-5bcadb96ebd0]
+[PHONE:dce7e4f4-4aeb-231c-daaf-2efd7bd2ae71]
+[CARD:600c5f6d-a18d-1f01-da05-4a5c3ee5ac24]
+[SSN:b6c14fa6-715f-ee1d-aede-9dad4059da03]
 ```
 
 Two parameters matter here:
@@ -132,7 +172,7 @@ Two parameters matter here:
   ```json
   { "created": null,
     "duplicates": [ { "record": "sarah.chen@example.com", "tokentype": "text", "tokenbase": "",
-        "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c" } ],
+        "tokenuuid": "cfd20fe2-8872-d109-780b-5bcadb96ebd0" } ],
     "summary": { "created": 0, "duplicates": 1, "errors": 0, "total": 1 } }
   ```
 
@@ -160,7 +200,7 @@ curl -X POST http://localhost:3000/v2/UserCreate \
 ```
 
 ```json
-{ "status": "ok", "token": "bf7975e3-9c55-cfbb-7143-b157f9045b3b" }
+{ "status": "ok", "token": "cba3da40-cab0-fc94-a020-8bab3eaaa7c9" }
 ```
 
 That token is what your own database stores in place of the profile. The whole record — four fields here, and any you add later — is **one** licensed record.
@@ -175,7 +215,7 @@ def profile_placeholders(user_token, fields=USER_FIELDS):
 ```
 
 ```python
-ph = profile_placeholders("bf7975e3-9c55-cfbb-7143-b157f9045b3b")
+ph = profile_placeholders("cba3da40-cab0-fc94-a020-8bab3eaaa7c9")
 
 profile_prompt = (
     f"Draft a reply to {ph['NAME']} at {ph['EMAIL']} about the disputed "
@@ -183,9 +223,9 @@ profile_prompt = (
 ```
 
 ```
-Draft a reply to [NAME:bf7975e3-9c55-cfbb-7143-b157f9045b3b] at
-[EMAIL:bf7975e3-9c55-cfbb-7143-b157f9045b3b] about the disputed $420 charge, and
-confirm the address on file is [ADDRESS:bf7975e3-9c55-cfbb-7143-b157f9045b3b].
+Draft a reply to [NAME:cba3da40-cab0-fc94-a020-8bab3eaaa7c9] at
+[EMAIL:cba3da40-cab0-fc94-a020-8bab3eaaa7c9] about the disputed $420 charge, and
+confirm the address on file is [ADDRESS:cba3da40-cab0-fc94-a020-8bab3eaaa7c9].
 ```
 
 No `TokenCreateBulk` call, no extra records, and no plaintext in your process — you never had to read the profile to build the prompt. The address and name are covered as reliably as the email, which is the one thing pattern matching cannot promise.
@@ -259,15 +299,15 @@ Bulk detokenization returns plaintext, so it takes a short-lived unlock UUID as 
 ```bash
 curl -X POST http://localhost:3000/v2/BulkListUnlock \
   -H "X-Bunker-Token: DEMO"
-# -> { "status": "ok", "unlockuuid": "41eebce8-ab58-f19f-79ab-e52a388bcb64" }
+# -> { "status": "ok", "unlockuuid": "29ffb00c-2585-7ed2-0278-14bcbb884471" }
 
 curl -X POST http://localhost:3000/v2/BulkListTokens \
   -H "X-Bunker-Token: DEMO" \
   -H "Content-Type: application/json" \
   -d '{
-    "unlockuuid": "41eebce8-ab58-f19f-79ab-e52a388bcb64",
-    "tokens": ["1d9b1854-45a0-3691-7454-982e1079291c",
-               "4ca02ed1-a283-e6d1-736c-b43fb3cda51f"]
+    "unlockuuid": "29ffb00c-2585-7ed2-0278-14bcbb884471",
+    "tokens": ["cfd20fe2-8872-d109-780b-5bcadb96ebd0",
+               "600c5f6d-a18d-1f01-da05-4a5c3ee5ac24"]
   }'
 ```
 
@@ -276,13 +316,13 @@ curl -X POST http://localhost:3000/v2/BulkListTokens \
   "status": "ok",
   "total": 2,
   "rows": [
-    { "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c",
+    { "tokenuuid": "cfd20fe2-8872-d109-780b-5bcadb96ebd0",
       "record": "sarah.chen@example.com", "tokentype": "text",
-      "creationtime": 1787488364, "finaltime": 1787574764, "slidingtime": 0 },
-    { "tokenuuid": "4ca02ed1-a283-e6d1-736c-b43fb3cda51f",
-      "tokenbase": "1200691873157434", "record": "4532015112830366",
-      "tokentype": "creditcard", "creationtime": 1787488364,
-      "finaltime": 1787574764, "slidingtime": 0 }
+      "creationtime": 1787490564, "finaltime": 1787576964, "slidingtime": 0 },
+    { "tokenuuid": "600c5f6d-a18d-1f01-da05-4a5c3ee5ac24",
+      "tokenbase": "6372210073800049", "record": "4532015112830366",
+      "tokentype": "creditcard", "creationtime": 1787490564,
+      "finaltime": 1787576964, "slidingtime": 0 }
   ]
 }
 ```
@@ -326,13 +366,13 @@ If the placeholders came from a user record, they all carry the same user token,
 curl -X POST http://localhost:3000/v2/UserGet \
   -H "X-Bunker-Token: DEMO" \
   -H "Content-Type: application/json" \
-  -d '{"mode":"token","identity":"bf7975e3-9c55-cfbb-7143-b157f9045b3b"}'
+  -d '{"mode":"token","identity":"cba3da40-cab0-fc94-a020-8bab3eaaa7c9"}'
 ```
 
 ```json
 {
   "status": "ok",
-  "token": "bf7975e3-9c55-cfbb-7143-b157f9045b3b",
+  "token": "cba3da40-cab0-fc94-a020-8bab3eaaa7c9",
   "profile": {
     "name": "Sarah Chen",
     "email": "sarah.chen@example.com",
@@ -355,7 +395,7 @@ def profile_map(user_token, fields=USER_FIELDS):
 Pass it as `known` and those placeholders resolve locally:
 
 ```python
-answer = detokenize(reply, profile_map("bf7975e3-9c55-cfbb-7143-b157f9045b3b"))
+answer = detokenize(reply, profile_map("cba3da40-cab0-fc94-a020-8bab3eaaa7c9"))
 ```
 
 Anything the model echoed that is *not* in that profile — a token from free text, or one carried over from an earlier turn — still falls through to `BulkListTokens`, for exactly those tokens and no more.
@@ -371,6 +411,8 @@ A placeholder neither source recognizes — one the model hallucinated, or one t
 
 ## The complete round trip
 
+The four steps compose into the exchange shown at the [top of this page](#what-it-looks-like):
+
 ```python
 prompt = ("Draft a reply to the customer at sarah.chen@example.com about the "
           "disputed $420 charge on card 4532015112830366. Their phone on file "
@@ -381,25 +423,7 @@ reply = ask(safe)
 print(detokenize(reply))
 ```
 
-What leaves your network:
-
-```
-Draft a reply to the customer at [EMAIL:1d9b1854-45a0-3691-7454-982e1079291c]
-about the disputed $420 charge on card
-[CARD:4ca02ed1-a283-e6d1-736c-b43fb3cda51f]. Their phone on file is
-[PHONE:d623a7f6-b535-a9c3-8c9d-4eea60d68149] and their SSN is
-[SSN:6e215cb0-efcd-55d1-1ce9-dcf156d8a380].
-```
-
-Every personal value is gone, and the request still reads as a coherent task.
-
-The model's reply comes back still carrying the placeholders, and `detokenize` restores them:
-
-```
-I've emailed sarah.chen@example.com to confirm, and the $420 charge on card
-4532015112830366 will be reversed within 3 business days. If the refund has not
-appeared by then, they can reach us on +1 415-555-0142.
-```
+`tokenize` finds the four values and swaps in placeholders, `ask` sends a prompt carrying no personal data, and `detokenize` restores the values in the answer. Nothing personal is written to your logs, your traces, or the provider's.
 
 ## Retention
 
@@ -429,11 +453,44 @@ Tokenization narrows the blast radius. It does not make the problem go away, and
 - **Detokenization is a privilege boundary.** Whatever resolves the reply holds a credential that turns tokens back into plaintext. Scope it with an [access-control policy](/pro/administration/access-control) rather than using the root token, and keep the detokenizing step out of any component that forwards text onward.
 - **The audit trail records the call, not the token.** `TokenGet`, `BulkListUnlock`, and `BulkListTokens` each write an audit event with the caller identity, tenant, timestamp, and status — enough to show who detokenized and when, but not which values they resolved.
 
-## Cost
+## Why a vault, and not a dictionary?
 
-Each token is a licensed record — the same accounting as any other tokenized value. The prompt above consumes four records the first time it is seen, and none on later prompts carrying the same values, because `unique: true` returns the existing tokens. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
+This pattern does not obviously need a vault. The direct implementation keeps a map in memory, filled when you build the prompt and read when the reply comes back:
 
-Against your model provider, a UUID placeholder costs more input tokens than the short value it replaces. Measure that against your own traffic before optimising for it.
+```python
+import uuid
+
+placeholders = {}                   # placeholder -> real value, for this request
+safe = prompt
+for start, end, label, value in reversed(find_pii(prompt)):
+    token = f"[{label}:{uuid.uuid4()}]"
+    placeholders[token] = value
+    safe = safe[:start] + token + safe[end:]
+```
+
+For a single process that builds a prompt, calls a model, restores the answer and exits, that is genuinely enough — reach for nothing heavier. It stops being enough the moment a token has to outlive the request that made it.
+
+| | A local map | Databunker Pro |
+| --- | --- | --- |
+| Where the value sits during the call | Process memory — and any heap dump, core file, or crash report taken from it | Encrypted at rest in the vault |
+| The same email on turn 1 and turn 7 | A different placeholder each turn, unless you persist the map yourself | `unique: true` returns the token already issued |
+| Two workers serving one conversation | Each holds its own map and cannot read the other's | Any instance resolves any token |
+| Retention | You write the eviction, and it is your bug if it misses | `finaltime` and `slidingtime` expire the token unprompted |
+| An erasure request | You locate every surviving copy of the map | `TokenDelete`, or `BulkDeleteTokens` for many |
+| Who may turn a token back into a value | Any code holding the map | Scoped by [access-control policy](/pro/administration/access-control); bulk reads need a second `BulkListUnlock` step |
+| Evidence for an auditor | You build the logging | An audit event for every create and every resolve |
+| A card that must stay card-shaped | Implement format-preserving encryption yourself | `tokenbase` — same length, still Luhn-valid |
+| Tenant isolation | Application-layer filtering | PostgreSQL [row-level security](/pro/administration/multi-tenancy) |
+
+The vault is not free, and the honest entries run the other way too:
+
+| | A local map | Databunker Pro |
+| --- | --- | --- |
+| Latency | None | One call to tokenize, one to resolve |
+| Cost per value | None | One licensed record per distinct value — see [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record) |
+| Failure mode | The map dies with the process | The vault is a dependency on the request path |
+
+So the question is not which is better in the abstract. It is whether the mapping between a placeholder and a real person is something your application can afford to lose, leak, or fail to erase. Once it is state you have to keep — across turns, across services, across an audit — you have started building a vault, and the [build-or-buy trade-off](/pro/comparisons/custom-solution-alternative) applies in full.
 
 ## Related
 
