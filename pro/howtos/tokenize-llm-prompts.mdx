@@ -1,0 +1,443 @@
+---
+title: Tokenize PII before it reaches an LLM
+sidebarTitle: Tokenize LLM prompts
+description: Replace personal data in a prompt with Databunker Pro tokens before calling a model, then restore the real values in the response.
+---
+
+A prompt sent to a hosted model leaves your infrastructure. So does the retrieved context behind it, the tool output the agent reads back, and the trace your observability stack keeps. Anything personal in that text is now held by a third party, on their retention schedule, in logs you do not control.
+
+Tokenization removes the personal data before the call and puts it back afterwards. The model reasons over placeholders; the plaintext never leaves the vault.
+
+```
+prompt ──▶ find PII ──▶ TokenCreateBulk ──▶ prompt with tokens ──▶ model
+                                                                      │
+ answer ◀── BulkListTokens ◀── reply with tokens ◀───────────────────┘
+```
+
+This guide uses [demo mode](/pro/get-started/quickstart) — one `docker run`, root token `DEMO` — so every call below is runnable as written.
+
+```bash
+docker run -p 3000:3000 -d --rm --name databunkerpro securitybunker/databunkerpro demo
+```
+
+<Tip>
+If the personal data reaches the prompt from your own database rather than from free text, you can skip detection altogether: tokenize at ingest and store the token in place of the value, the pattern in [Store user fields](/pro/howtos/store-user-fields). Prompts built from those rows are tokenized before they are assembled.
+</Tip>
+
+## Step 1: Find the personal data
+
+Regular expressions handle values with a fixed shape. Order them most specific first, and discard any match that overlaps a span already taken, or a loose pattern will claim a span a precise one should own.
+
+```python
+import re
+
+DETECTORS = [
+    ("EMAIL", re.compile(r"\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b")),
+    ("SSN",   re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    ("CARD",  re.compile(r"\b(?:\d[ -]?){12,18}\d\b")),
+    ("PHONE", re.compile(r"\+?\d[\d\s().-]{7,}\d")),
+]
+
+def find_pii(text):
+    spans = []
+    for label, rx in DETECTORS:
+        for m in rx.finditer(text):
+            if not any(m.start() < e and s < m.end() for s, e, _, _ in spans):
+                spans.append((m.start(), m.end(), label, m.group()))
+    return sorted(spans)
+```
+
+Put `SSN` after `PHONE` in that list and `123-45-6789` is tokenized as a phone number — the digit pattern matches it too, and whichever runs first wins.
+
+<Warning>
+Patterns only find values with a fixed shape. Names, street addresses, employers, and diagnoses are missed entirely. They also produce false positives: the `PHONE` pattern above matches the bare date `2026-08-23`, which then becomes an opaque token the model cannot reason about.
+
+For free text that may carry values without a fixed shape, run a named-entity recognition model such as [Microsoft Presidio](https://microsoft.github.io/presidio/) and treat these regexes as a backstop. Detection quality, not the vault, sets the ceiling on what this pattern protects.
+</Warning>
+
+## Step 2: Tokenize the values
+
+How a value becomes a placeholder depends on where it came from: discovered in free text, or already held as a user record. Pick the tab that matches your prompt — the two take different calls.
+
+The Python snippets throughout use one small HTTP helper:
+
+```python
+import json, os, re, urllib.request
+
+BUNKER = os.environ.get("DATABUNKER_URL", "http://localhost:3000/v2")
+BUNKER_TOKEN = os.environ.get("DATABUNKER_TOKEN", "DEMO")
+
+def bunker(op, body):
+    req = urllib.request.Request(
+        f"{BUNKER}/{op}", data=json.dumps(body).encode(),
+        headers={"X-Bunker-Token": BUNKER_TOKEN, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req) as r:
+        return json.load(r)
+```
+
+<Tabs>
+<Tab title="Found in free text">
+
+The values come from `find_pii` above, so each label is whatever the matching pattern was named.
+
+```bash
+curl -X POST http://localhost:3000/v2/TokenCreateBulk \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+      { "tokentype": "string",     "record": "sarah.chen@example.com" },
+      { "tokentype": "string",     "record": "+1 415-555-0142" },
+      { "tokentype": "creditcard", "record": "4532015112830366" },
+      { "tokentype": "string",     "record": "123-45-6789" }
+    ],
+    "unique": true,
+    "finaltime": "24h"
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "created": [
+    { "record": "sarah.chen@example.com", "tokentype": "text", "tokenbase": "",
+      "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c" },
+    { "record": "+1 415-555-0142", "tokentype": "text", "tokenbase": "",
+      "tokenuuid": "d623a7f6-b535-a9c3-8c9d-4eea60d68149" },
+    { "record": "4532015112830366", "tokentype": "creditcard", "tokenbase": "1200691873157434",
+      "tokenuuid": "4ca02ed1-a283-e6d1-736c-b43fb3cda51f" },
+    { "record": "123-45-6789", "tokentype": "text", "tokenbase": "",
+      "tokenuuid": "6e215cb0-efcd-55d1-1ce9-dcf156d8a380" }
+  ],
+  "num": 4,
+  "summary": { "created": 4, "duplicates": 0, "errors": 0, "total": 4 }
+}
+```
+
+Each row echoes the `record` it came from, which is what lets you map tokens back onto the spans you found. `string` is stored under its canonical name `text`, and only `creditcard` carries a `tokenbase`.
+
+Which gives the placeholders the prompt is built from:
+
+```
+[EMAIL:1d9b1854-45a0-3691-7454-982e1079291c]
+[PHONE:d623a7f6-b535-a9c3-8c9d-4eea60d68149]
+[CARD:4ca02ed1-a283-e6d1-736c-b43fb3cda51f]
+[SSN:6e215cb0-efcd-55d1-1ce9-dcf156d8a380]
+```
+
+Two parameters matter here:
+
+- **`unique: true`** returns the *same* token for a value already in the vault, so an email keeps one identity across every turn of a conversation and across restarts. Without it each call mints a new token and the model sees the same person as a different one each time. Send a value again and it comes back under `duplicates`, carrying the original token:
+
+  ```json
+  { "created": null,
+    "duplicates": [ { "record": "sarah.chen@example.com", "tokentype": "text", "tokenbase": "",
+        "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c" } ],
+    "summary": { "created": 0, "duplicates": 1, "errors": 0, "total": 1 } }
+  ```
+
+- **`finaltime`** expires the token without a cleanup call. A prompt token rarely needs to outlive the conversation — see [Retention](#retention) below.
+
+</Tab>
+<Tab title="The user profile is known">
+
+**Do not tokenize a second time.** If the person is already a user record, the profile is encrypted in the vault and the user token already stands in for it. Minting per-field tokens on top would store a second copy of the same data and bill a licensed record for every field.
+
+Create the user once, at signup or migration — not per prompt:
+
+```bash
+curl -X POST http://localhost:3000/v2/UserCreate \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile": {
+      "name": "Sarah Chen",
+      "email": "sarah.chen@example.com",
+      "phone": "+1 415-555-0142",
+      "address": "1 Market Street, San Francisco, CA"
+    }
+  }'
+```
+
+```json
+{ "status": "ok", "token": "bf7975e3-9c55-cfbb-7143-b157f9045b3b" }
+```
+
+That token is what your own database stores in place of the profile. The whole record — four fields here, and any you add later — is **one** licensed record.
+
+Now the prompt writes itself, because a field is fully identified by *which user* and *which field*. Use the user token as the UUID and the field name as the label:
+
+```python
+USER_FIELDS = ("NAME", "EMAIL", "PHONE", "ADDRESS")
+
+def profile_placeholders(user_token, fields=USER_FIELDS):
+    return {f: f"[{f}:{user_token}]" for f in fields}
+```
+
+```python
+ph = profile_placeholders("bf7975e3-9c55-cfbb-7143-b157f9045b3b")
+
+profile_prompt = (
+    f"Draft a reply to {ph['NAME']} at {ph['EMAIL']} about the disputed "
+    f"$420 charge, and confirm the address on file is {ph['ADDRESS']}.")
+```
+
+```
+Draft a reply to [NAME:bf7975e3-9c55-cfbb-7143-b157f9045b3b] at
+[EMAIL:bf7975e3-9c55-cfbb-7143-b157f9045b3b] about the disputed $420 charge, and
+confirm the address on file is [ADDRESS:bf7975e3-9c55-cfbb-7143-b157f9045b3b].
+```
+
+No `TokenCreateBulk` call, no extra records, and no plaintext in your process — you never had to read the profile to build the prompt. The address and name are covered as reliably as the email, which is the one thing pattern matching cannot promise.
+
+<Warning>
+Every placeholder for one user carries the same UUID, so the label is what selects the field — it is load-bearing here, not a hint. The reverse map must be keyed on the pair, which is what `detokenize` in [Step 4](#step-4-detokenize-the-reply) does.
+
+It also means one stable identifier per user appears in every prompt about them. That is the same linkability trade-off as `unique: true`; if it matters, mint a short-lived `TokenCreate` token per conversation instead.
+</Warning>
+
+</Tab>
+</Tabs>
+
+Either way the prompt ends up carrying `[LABEL:uuid]` in place of every value. The label is what lets the model reason — it can write an email address into a sentence about sending mail without ever seeing one. The UUID is what makes detokenization stateless: the placeholder carries its own identity, so any process holding vault access can resolve it later, with nothing kept on the side in between.
+
+## Step 3: Build the prompt and call the model
+
+Substitute back-to-front so earlier replacements do not shift the offsets of later spans.
+
+```python
+def tokenize(text, ttl="24h"):
+    spans = find_pii(text)
+    if not spans:
+        return text
+    records = [{"tokentype": "creditcard" if label == "CARD" else "string", "record": value}
+               for _, _, label, value in spans]
+    resp = bunker("TokenCreateBulk",
+                  {"records": records, "unique": True, "finaltime": ttl})
+    minted = {r["record"]: r["tokenuuid"]
+              for r in (resp.get("created") or []) + (resp.get("duplicates") or [])}
+    for start, end, label, value in reversed(spans):
+        text = text[:start] + f"[{label}:{minted[value]}]" + text[end:]
+    return text
+```
+
+Tell the model what the placeholders are, so it carries them through instead of inventing values:
+
+```python
+import anthropic
+
+SYSTEM = """Text in square brackets such as [EMAIL:<uuid>] is a placeholder for
+redacted personal data. Treat each one as an opaque identifier for a real value
+of that type. Copy any placeholder you need to reference exactly as written.
+Never invent, complete, or alter a placeholder."""
+
+client = anthropic.Anthropic()
+
+def ask(prompt):
+    response = client.messages.create(
+        model="claude-opus-5",
+        max_tokens=16000,
+        system=SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(b.text for b in response.content if b.type == "text")
+```
+
+## Step 4: Detokenize the reply
+
+The model's reply comes back carrying the same placeholders. Resolving them is one regex pass plus a source of plaintext — and the source is whichever tab you took in [Step 2](#step-2-tokenize-the-values).
+
+```python
+PLACEHOLDER = re.compile(r"\[([A-Z]+):([0-9a-fA-F-]{36})\]")
+```
+
+<Tabs>
+<Tab title="Resolve through the vault">
+
+Bulk detokenization returns plaintext, so it takes a short-lived unlock UUID as a second authorization step: call `BulkListUnlock`, then pass the `unlockuuid` to `BulkListTokens`.
+
+```bash
+curl -X POST http://localhost:3000/v2/BulkListUnlock \
+  -H "X-Bunker-Token: DEMO"
+# -> { "status": "ok", "unlockuuid": "41eebce8-ab58-f19f-79ab-e52a388bcb64" }
+
+curl -X POST http://localhost:3000/v2/BulkListTokens \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "unlockuuid": "41eebce8-ab58-f19f-79ab-e52a388bcb64",
+    "tokens": ["1d9b1854-45a0-3691-7454-982e1079291c",
+               "4ca02ed1-a283-e6d1-736c-b43fb3cda51f"]
+  }'
+```
+
+```json
+{
+  "status": "ok",
+  "total": 2,
+  "rows": [
+    { "tokenuuid": "1d9b1854-45a0-3691-7454-982e1079291c",
+      "record": "sarah.chen@example.com", "tokentype": "text",
+      "creationtime": 1787488364, "finaltime": 1787574764, "slidingtime": 0 },
+    { "tokenuuid": "4ca02ed1-a283-e6d1-736c-b43fb3cda51f",
+      "tokenbase": "1200691873157434", "record": "4532015112830366",
+      "tokentype": "creditcard", "creationtime": 1787488364,
+      "finaltime": 1787574764, "slidingtime": 0 }
+  ]
+}
+```
+
+An `unlockuuid` is good for one bulk session — fetch a fresh one each time rather than caching it.
+
+In Python, collect the distinct UUIDs the model echoed back and resolve them in one call:
+
+```python
+def detokenize(text, known=None):
+    known = known or {}                                  # {(label, uuid): plaintext}
+    need = {u for l, u in PLACEHOLDER.findall(text) if (l, u) not in known}
+    vault = {}
+    if need:
+        unlock = bunker("BulkListUnlock", {})["unlockuuid"]
+        rows = bunker("BulkListTokens",
+                      {"unlockuuid": unlock, "tokens": list(need)})["rows"]
+        vault = {r["tokenuuid"]: r["record"] for r in rows}
+
+    def resolve(m):
+        label, uuid = m.group(1), m.group(2)
+        if (label, uuid) in known:
+            return known[(label, uuid)]
+        return vault.get(uuid, m.group(0))
+
+    return PLACEHOLDER.sub(resolve, text)
+```
+
+```python
+answer = detokenize(reply)
+```
+
+This is the general case: it resolves any token, including ones minted in an earlier turn or by another service.
+
+</Tab>
+<Tab title="Resolve from a prefetched profile">
+
+If the placeholders came from a user record, they all carry the same user token, and one `UserGet` covers every one of them — no `BulkListUnlock`, no bulk-export privilege.
+
+```bash
+curl -X POST http://localhost:3000/v2/UserGet \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"token","identity":"bf7975e3-9c55-cfbb-7143-b157f9045b3b"}'
+```
+
+```json
+{
+  "status": "ok",
+  "token": "bf7975e3-9c55-cfbb-7143-b157f9045b3b",
+  "profile": {
+    "name": "Sarah Chen",
+    "email": "sarah.chen@example.com",
+    "phone": "+1 415-555-0142",
+    "address": "1 Market Street, San Francisco, CA"
+  },
+  "version": 1
+}
+```
+
+Key the map on the `(label, uuid)` pair, since the UUID alone does not say which field:
+
+```python
+def profile_map(user_token, fields=USER_FIELDS):
+    profile = bunker("UserGet", {"mode": "token", "identity": user_token})["profile"]
+    return {(f, user_token): profile[f.lower()]
+            for f in fields if f.lower() in profile}
+```
+
+Pass it as `known` and those placeholders resolve locally:
+
+```python
+answer = detokenize(reply, profile_map("bf7975e3-9c55-cfbb-7143-b157f9045b3b"))
+```
+
+Anything the model echoed that is *not* in that profile — a token from free text, or one carried over from an earlier turn — still falls through to `BulkListTokens`, for exactly those tokens and no more.
+
+<Note>
+A profile fetched this way is one `UserGet` against a record you are already entitled to read, rather than a bulk detokenization. Scope that entitlement with an [access-control policy](/pro/administration/access-control) so the component resolving replies can read the users it serves and no others.
+</Note>
+
+</Tab>
+</Tabs>
+
+A placeholder neither source recognizes — one the model hallucinated, or one that has expired — is left in place by the `vault.get(uuid, m.group(0))` fallback. It fails closed: an unresolvable token is never silently replaced with the wrong value.
+
+## The complete round trip
+
+```python
+prompt = ("Draft a reply to the customer at sarah.chen@example.com about the "
+          "disputed $420 charge on card 4532015112830366. Their phone on file "
+          "is +1 415-555-0142 and their SSN is 123-45-6789.")
+
+safe = tokenize(prompt)
+reply = ask(safe)
+print(detokenize(reply))
+```
+
+What leaves your network:
+
+```
+Draft a reply to the customer at [EMAIL:1d9b1854-45a0-3691-7454-982e1079291c]
+about the disputed $420 charge on card
+[CARD:4ca02ed1-a283-e6d1-736c-b43fb3cda51f]. Their phone on file is
+[PHONE:d623a7f6-b535-a9c3-8c9d-4eea60d68149] and their SSN is
+[SSN:6e215cb0-efcd-55d1-1ce9-dcf156d8a380].
+```
+
+Every personal value is gone, and the request still reads as a coherent task.
+
+The model's reply comes back still carrying the placeholders, and `detokenize` restores them:
+
+```
+I've emailed sarah.chen@example.com to confirm, and the $420 charge on card
+4532015112830366 will be reversed within 3 business days. If the refund has not
+appeared by then, they can reach us on +1 415-555-0142.
+```
+
+## Retention
+
+Give prompt tokens an expiry. A token minted for a conversation rarely needs to outlive it, and expiry means a retention limit does not depend on your bookkeeping being correct:
+
+```bash
+curl -X POST http://localhost:3000/v2/TokenCreate \
+  -H "X-Bunker-Token: DEMO" \
+  -H "Content-Type: application/json" \
+  -d '{"tokentype":"string","record":"sarah.chen@example.com","unique":true,"finaltime":"24h"}'
+```
+
+After `finaltime` elapses the token reports `token expired` and stops resolving, with no cleanup call from you. `slidingtime` restarts the window on every access instead, which suits a long-running conversation. To remove a token early, use `TokenDelete` for one or `BulkDeleteTokens` — which takes the same `unlockuuid` as `BulkListTokens` — for many.
+
+<Note>
+Because `unique: true` returns an existing token, a value already in the vault keeps the expiry it was created with. The `finaltime` you send on a repeat call does not extend it.
+</Note>
+
+## What this does not protect
+
+Tokenization narrows the blast radius. It does not make the problem go away, and a security reviewer will ask about each of these.
+
+- **Tokenized data is still personal data.** This is pseudonymization, not anonymization. Under GDPR the tokenized prompt remains in scope, because you hold the key that reverses it. It reduces exposure to the model provider; it does not take the workload out of scope.
+- **Detection sets the ceiling.** Everything the patterns miss is sent in the clear. Names, employers, and locations need NER, and NER is not perfect either.
+- **Context can re-identify.** "The patient in room 4 admitted Tuesday" identifies someone with no tokenizable field present. `unique: true` makes it worse in one specific way: equal values produce equal tokens, so anyone holding two prompts can tell they concern the same person without resolving anything. That is the price of cross-turn consistency — see [why shared records, not long-lived tokens](/pro/concepts/shared-records).
+- **The model cannot use what it cannot see.** It cannot validate an address, sort by surname, or judge whether an email looks like a throwaway domain. If the task genuinely needs the value, tokenizing that field breaks the task.
+- **Detokenization is a privilege boundary.** Whatever resolves the reply holds a credential that turns tokens back into plaintext. Scope it with an [access-control policy](/pro/administration/access-control) rather than using the root token, and keep the detokenizing step out of any component that forwards text onward.
+- **The audit trail records the call, not the token.** `TokenGet`, `BulkListUnlock`, and `BulkListTokens` each write an audit event with the caller identity, tenant, timestamp, and status — enough to show who detokenized and when, but not which values they resolved.
+
+## Cost
+
+Each token is a licensed record — the same accounting as any other tokenized value. The prompt above consumes four records the first time it is seen, and none on later prompts carrying the same values, because `unique: true` returns the existing tokens. See [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record).
+
+Against your model provider, a UUID placeholder costs more input tokens than the short value it replaces. Measure that against your own traffic before optimising for it.
+
+## Related
+
+- [Store user fields](/pro/howtos/store-user-fields) — whole-profile records versus per-field tokens
+- [Format-preserving tokenization](/pro/concepts/tokenization) — token types, expiry, bulk operations
+- [Access control](/pro/administration/access-control) — scoping who may detokenize
+- [Licensing and limits](/pro/get-started/licensing#what-counts-as-a-record) — what counts as a record
