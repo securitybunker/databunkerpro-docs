@@ -453,44 +453,49 @@ Tokenization narrows the blast radius. It does not make the problem go away, and
 - **Detokenization is a privilege boundary.** Whatever resolves the reply holds a credential that turns tokens back into plaintext. Scope it with an [access-control policy](/pro/administration/access-control) rather than using the root token, and keep the detokenizing step out of any component that forwards text onward.
 - **The audit trail records the call, not the token.** `TokenGet`, `BulkListUnlock`, and `BulkListTokens` each write an audit event with the caller identity, tenant, timestamp, and status — enough to show who detokenized and when, but not which values they resolved.
 
-## Why a vault, and not a dictionary?
+## Why not just build the token store?
 
-This pattern does not obviously need a vault. The direct implementation keeps a map in memory, filled when you build the prompt and read when the reply comes back:
+This is a small enough problem to build yourself, and with a model helping you write it, an afternoon is enough. A table, a UUID per value, two functions:
 
 ```python
-import uuid
+# tokens(uuid TEXT PRIMARY KEY, label TEXT, value TEXT)
 
-placeholders = {}                   # placeholder -> real value, for this request
-safe = prompt
-for start, end, label, value in reversed(find_pii(prompt)):
-    token = f"[{label}:{uuid.uuid4()}]"
-    placeholders[token] = value
-    safe = safe[:start] + token + safe[end:]
+def mint(db, label, value):
+    tok = str(uuid.uuid4())
+    db.execute("INSERT INTO tokens VALUES (?, ?, ?)", (tok, label, value))
+    return tok
+
+def resolve(db, tok):
+    row = db.execute("SELECT value FROM tokens WHERE uuid = ?", (tok,)).fetchone()
+    return row[0] if row else None
 ```
 
-For a single process that builds a prompt, calls a model, restores the answer and exits, that is genuinely enough — reach for nothing heavier. It stops being enough the moment a token has to outlive the request that made it.
+That is not a strawman. It is the right shape, it survives restarts and multiple workers, and on the happy path it does everything this guide describes.
 
-| | A local map | Databunker Pro |
+What it also does is collect every personal value that has ever passed through a prompt into one table, in plaintext, next to the token that names it. That table is now the most sensitive asset in your system: anything that can read it has undone the tokenization for your entire history, and the more prompts you tokenize the more that is worth. The remaining work is not prompt handling — it is turning a mapping table into something you can defend, and hand to an auditor.
+
+| | Your own token store | Databunker Pro |
 | --- | --- | --- |
-| Where the value sits during the call | Process memory — and any heap dump, core file, or crash report taken from it | Encrypted at rest in the vault |
-| The same email on turn 1 and turn 7 | A different placeholder each turn, unless you persist the map yourself | `unique: true` returns the token already issued |
-| Two workers serving one conversation | Each holds its own map and cannot read the other's | Any instance resolves any token |
-| Retention | You write the eviction, and it is your bug if it misses | `finaltime` and `slidingtime` expire the token unprompted |
-| An erasure request | You locate every surviving copy of the map | `TokenDelete`, or `BulkDeleteTokens` for many |
-| Who may turn a token back into a value | Any code holding the map | Scoped by [access-control policy](/pro/administration/access-control); bulk reads need a second `BulkListUnlock` step |
-| Evidence for an auditor | You build the logging | An audit event for every create and every resolve |
+| The mapping at rest | A plaintext column, as safe as the database around it | Each record AES-256 encrypted under a [master key](/pro/administration/master-key) that is never exposed — not to you, not through any API |
+| Key custody | One key in an environment variable; leaking it and losing it are both terminal | You hold only the wrapping key. [Rotate it](/pro/administration/key-rotation) through an API call without re-encrypting a record; recover it from any three of five [Shamir shares](/pro/administration/shamir-keys) |
+| Who may turn a token back into a value | Anyone holding database credentials, or anyone who can reach the endpoint | A scoped [access-control policy](/pro/administration/access-control) per API token — the component that resolves replies need not be able to do anything else |
+| Reading many values at once | One `SELECT` away, which is also what an attacker runs first | A separate `BulkListUnlock` authorization step, plus [bulk export controls](/pro/concepts/select-security) on how much can leave at all |
+| Evidence for an auditor | Logging you write, covering what you remembered to cover | Every create and every resolve audited, with the PII inside the audit events itself encrypted |
+| Tenant isolation | `WHERE tenant = ?` on every query, correct every time, forever | PostgreSQL [row-level security](/pro/administration/multi-tenancy#database-level-tenant-isolation) — a query that omits its tenant condition still returns nothing |
+| Retention | A cleanup job you write, and your bug if it misses | `finaltime` and `slidingtime` expire the token unprompted |
+| An erasure request | Locate every surviving copy, including replicas and backups | `TokenDelete`, or `BulkDeleteTokens` for many |
+| The same email on turn 1 and turn 7 | Dedupe yourself, or one person looks like a different one each turn | `unique: true` returns the token already issued |
 | A card that must stay card-shaped | Implement format-preserving encryption yourself | `tokenbase` — same length, still Luhn-valid |
-| Tenant isolation | Application-layer filtering | PostgreSQL [row-level security](/pro/administration/multi-tenancy) |
 
 The vault is not free, and the honest entries run the other way too:
 
-| | A local map | Databunker Pro |
+| | Your own token store | Databunker Pro |
 | --- | --- | --- |
-| Latency | None | One call to tokenize, one to resolve |
-| Cost per value | None | One licensed record per distinct value — see [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record) |
-| Failure mode | The map dies with the process | The vault is a dependency on the request path |
+| Latency | A local query | One call to tokenize, one to resolve |
+| Cost per value | Storage | One licensed record per distinct value — see [what counts as a record](/pro/get-started/licensing#what-counts-as-a-record) |
+| Failure mode | Your database is already on the request path | The vault becomes a dependency on the request path |
 
-So the question is not which is better in the abstract. It is whether the mapping between a placeholder and a real person is something your application can afford to lose, leak, or fail to erase. Once it is state you have to keep — across turns, across services, across an audit — you have started building a vault, and the [build-or-buy trade-off](/pro/comparisons/custom-solution-alternative) applies in full.
+So the question is not whether you can build it. It is whether the table that reverses tokenization for every prompt you have ever sent is something you want to own, secure, rotate keys for, isolate per tenant, and defend in an audit. Once it is, you have started building a vault — and the [build-or-buy trade-off](/pro/comparisons/custom-solution-alternative) applies in full.
 
 ## Related
 
