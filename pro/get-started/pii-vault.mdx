@@ -95,7 +95,8 @@ Together, these properties mean that **tokens within a tenant are stable, determ
 
 ### Storing User PII
 
-**REST API Example:**
+<Tabs>
+<Tab title="cURL">
 
 ```bash
 curl -X POST https://your-databunker-pro/v2/UserCreate \
@@ -123,7 +124,9 @@ curl -X POST https://your-databunker-pro/v2/UserCreate \
 }
 ```
 
-**JavaScript/Node.js Example:**
+</Tab>
+
+<Tab title="JavaScript">
 
 ```javascript
 const axios = require("axios");
@@ -170,7 +173,9 @@ const userToken = await storeUserPII({
 });
 ```
 
-**Python Example:**
+</Tab>
+
+<Tab title="Python">
 
 ```python
 import requests
@@ -212,9 +217,13 @@ user_token = store_user_pii({
 })
 ```
 
+</Tab>
+</Tabs>
+
 ### Retrieving User PII
 
-**Retrieve by Token:**
+<Tabs>
+<Tab title="Retrieve by Token">
 
 ```bash
 curl -X POST https://your-databunker-pro/v2/UserGet \
@@ -226,7 +235,9 @@ curl -X POST https://your-databunker-pro/v2/UserGet \
   }'
 ```
 
-**Retrieve by Email:**
+</Tab>
+
+<Tab title="Retrieve by Email">
 
 ```bash
 curl -X POST https://your-databunker-pro/v2/UserGet \
@@ -238,7 +249,9 @@ curl -X POST https://your-databunker-pro/v2/UserGet \
   }'
 ```
 
-**Retrieve by Phone:**
+</Tab>
+
+<Tab title="Retrieve by Phone">
 
 ```bash
 curl -X POST https://your-databunker-pro/v2/UserGet \
@@ -249,6 +262,9 @@ curl -X POST https://your-databunker-pro/v2/UserGet \
     "identity": "+1-555-123-4567"
   }'
 ```
+
+</Tab>
+</Tabs>
 
 ## Security controls
 
