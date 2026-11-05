@@ -1,6 +1,6 @@
 # Databunker Documentation
 
-Source for the official [Databunker](https://databunker.org/) documentation, published at **[docs.databunker.org](https://docs.databunker.org/)**.
+Source for the official [Databunker](https://databunker.org/) documentation, published at **[docs.databunker.org](https://docs.databunker.org/)**. The developer hub is at [databunker.org/developers](https://databunker.org/developers/).
 
 Databunker is a secure vault for personal data (PII, PHI, PCI, KYC) — it encrypts sensitive records and replaces them in your database with safe, random tokens. The docs cover two products:
 
@@ -80,11 +80,12 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **Voice pass** — every `## Conclusion` / `## Why Choose` sales block removed site-wide, marketing openers cut, emoji headings gone, and **Next steps** added to 8 dead-end pages. Nine pages now route readers to the [quickstart](pro/get-started/quickstart.mdx), up from three | Question 1 (partial) |
 | **[Monitoring](pro/administration/monitoring.mdx)** — new page: Prometheus scrape config and alert rules with thresholds from the benchmarks, plus licence usage and database health, which `/metrics` does not report | Question 4 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
+| **[SDK page](pro/developer-tools/overview.mdx)** — install commands and a create-a-user example for JavaScript, TypeScript, Python, PHP and Java; the Java client is documented via JitPack, since it is not on Maven Central | Question 2 (partial) |
 | **[Session management](pro/howtos/session-management.mdx)** — new how-to: server-side sessions with sliding and absolute expiry, logout, log out everywhere, cookie settings. Writing it surfaced Redis-mode bugs in delete, list and tenant isolation, fixed in databunkerpro #61 | Question 2 (partial) |
+| **[Developer hub](https://databunker.org/developers/)** — card-grid landing page on the marketing site: first API call in cURL and four SDKs, the round trip to a masked `UserGet`, benchmark strip, API reference and OpenAPI spec | Question 1 (partial) |
 
-**All five Priority 0 pages are shipped except the hub page (P0.1).** The highest-value remaining
-gaps are a changelog (P1.7) — the only thing between question 9 and a tick — the hub page, and the
-threat model (P1.2).
+The highest-value remaining gaps are a changelog (P1.7) — the only thing between question 9 and a
+tick — and the threat model (P1.2).
 
 ### Sites benchmarked
 
@@ -104,64 +105,26 @@ threat model (P1.2).
 | **Skyflow** | PII vault (closest competitor) | **Fundamentals** (get started + *usage patterns* for PII / PCI / LLM privacy / analytics + core concepts), then **Governance**, **Tokenization**, **Connections**, **SDKs**, **API Reference**, **Release Notes**. |
 | **Basis Theory** | tokenization/PCI vault | Nav organised by **use case** — including **Migrations** as a use case — and a **Platform** section containing **Testing** and an interactive **Production Checklist** (account, PCI, access controls, operations, code). |
 
-#### Five patterns all 13 share that this repo is missing
+#### Patterns all 13 share that this repo is still missing
 
-1. **A hub page.** Every one of them has a landing page with a card grid. `docs.json` here has no root page — `docs.databunker.org` drops the reader straight into `pro/get-started/overview`, 59 lines of prose.
-2. ~~**A time-boxed quickstart above the fold.**~~ **Closed.** Pro now has [demo mode](pro/get-started/quickstart.mdx) — a single `docker run` on in-memory SQLite, no env files, no browser detour. Previously the shortest path to a first API call spanned two pages and a web UI.
-3. **Per-language code, everywhere.** Stripe/Twilio/Clerk/Supabase/Neon lead with SDK snippets and keep a language selector. Here: `CodeGroup` is used on **zero** pages, `openapi.yml` has **zero** `x-codeSamples` across 92 endpoints, and `pii-vault.mdx` hand-writes raw `axios` and `requests` calls — actively teaching readers to bypass the four SDKs that exist.
-4. **An operations story.** Partly closed — there is now a [production checklist](pro/installation/production-checklist.mdx) and a [backup and recovery](pro/administration/backup-and-recovery.mdx) page. Still missing what Vault and Temporal both have: **monitoring** and **upgrades / version support**.
-5. **Proof of life.** Changelog / release notes / version selector. All 13 have at least one. This repo has none — which, for self-hosted software a CTO must commit to running, reads as *abandoned or immature*.
+1. **Per-language code, everywhere.** Stripe/Twilio/Clerk/Supabase/Neon lead with SDK snippets and keep a language selector. Here `openapi.yml` has **zero** `x-codeSamples` across 92 endpoints, and `pii-vault.mdx` hand-writes raw `axios` and `requests` calls.
+2. **Upgrades / version support.** Vault and Temporal both document them; there is no upgrade page here.
+3. **Proof of life.** Changelog / release notes / version selector. All 13 have at least one. This repo has none — which, for self-hosted software a CTO must commit to running, reads as *abandoned or immature*.
 
 ### Score against the ten questions a CTO asks
 
-| # | Question | Today | Where it stands |
+| # | Question | Today | Still missing |
 | --- | --- | --- | --- |
-| 1 | What is this, do I need it? | ⚠️ | Marketing voice cleaned off site-wide, performance promoted to position 2, and the landing page now leads with the one-command demo. Still missing: a hub page and a Pro-vs-OSS decision page. |
-| 2 | Can my team integrate it in one sprint? | ⚠️ | A [quickstart](pro/get-started/quickstart.mdx) gets a first API call out of one `docker run`, and [developer tools](pro/developer-tools/overview.mdx) now carries install commands and a worked example for all four SDKs. Still missing: framework guides. |
-| 3 | Will it hold at our scale? | ✅✅ | `pro/get-started/performance.mdx` is genuinely best-in-class — measured, honest, with a sizing table and a *Confidence* column. Better than anything the 13 sites have on this axis. |
-| 4 | How do we run it in production? | ⚠️ | A [production checklist](pro/installation/production-checklist.mdx) gates go-live and [monitoring](pro/administration/monitoring.mdx) covers alerting. Still missing: upgrades and version support. |
-| 5 | What breaks, and how badly? | ⚠️ | Key loss, database loss, and recovery are documented. Still missing: a threat model, and root-token compromise. |
-| 6 | What does it cost; what does the licence gate? | ✅ | [Licensing and limits](pro/get-started/licensing.mdx) covers record caps, what counts as a record, licence scope, and behaviour at the cap and at expiry. Prices stay on the marketing site. |
-| 7 | Will it survive procurement and audit? | ⚠️ | Excellent material — SOC 2 in progress, no product-level IRAP, inherits the cloud IRAP boundary, FIPS 140-2 detail, an honest disclosure of non-cryptographic MD5 use — all **buried in FAQ answers 6–8**. |
-| 8 | Migration path in (and out)? | ✅ | [Migrations](pro/migrations/overview.mdx) covers moving in from a [SQL users table](pro/migrations/sql-users-table.mdx) or [AWS Cognito](pro/migrations/aws-cognito.mdx); [backup and recovery](pro/administration/backup-and-recovery.mdx) documents the audited export path out. |
-| 9 | Is the project alive? | ❌ | No changelog, no releases, no version support policy. |
-| 10 | How does it compare to alternatives? | ✅ | Three comparison pages exist (Cognito, Vault, build-your-own). Good — but filed under *Guides*, where an evaluator won't look. |
-
-**Read across that column: the docs are strong where an engineer has already committed, and empty
-exactly where a CTO decides.**
-
-### Priority 0 — the five pages that change the outcome
-
-#### P0.1 A hub page (`index.mdx`)
-
-Card grid, no prose wall. Four cards mirroring ClickHouse: **Get started · Evaluate · Integrate · Operate**.
-Below it: the three sandbox demos (user-table replacement, PCI tokenization, consent management) — today
-they appear on exactly one page. Below that: "Pro or OSS?" and the headline benchmark number.
-
-#### ✅ P0.2 Quickstart
-
-Shipped as [`pro/get-started/quickstart.mdx`](pro/get-started/quickstart.mdx), and it beats the
-original proposal: instead of scripting around the compose install, **demo mode** (Databunker Pro
-0.14.23+) runs the whole vault from one `docker run` on in-memory SQLite — no env files, no access
-code, no browser. Still worth adding: `curl`/JS/Python/Java tabs using the actual SDKs.
-
-#### ✅ P0.3 Migrate an existing users table
-
-Shipped as its own [Migrations](pro/migrations/overview.mdx) group rather than a single page, so
-Cognito and other sources can sit alongside the [SQL guide](pro/migrations/sql-users-table.mdx)
-without repeating the shared pattern.
-
-#### ✅ P0.4 Production checklist
-
-Shipped as [`pro/installation/production-checklist.mdx`](pro/installation/production-checklist.mdx) —
-placed in *Installation* rather than a new *Deploy* group, since it is a one-time go-live gate rather
-than an ongoing operational task.
-
-#### ✅ P0.5 Backup and recovery
-
-Shipped as [`pro/administration/backup-and-recovery.mdx`](pro/administration/backup-and-recovery.mdx) —
-placed in *Administration* beside key rotation and Shamir shares, since it is recurring operational
-work read during an incident, not a one-time install step.
+| 1 | What is this, do I need it? | ⚠️ | A Pro-vs-OSS decision page. |
+| 2 | Can my team integrate it in one sprint? | ⚠️ | Framework guides. |
+| 3 | Will it hold at our scale? | ✅✅ | — `performance.mdx` beats every site examined. |
+| 4 | How do we run it in production? | ⚠️ | Upgrades and version support. |
+| 5 | What breaks, and how badly? | ⚠️ | A threat model, and root-token compromise. |
+| 6 | What does it cost; what does the licence gate? | ✅ | — |
+| 7 | Will it survive procurement and audit? | ⚠️ | Compliance material is **buried in FAQ answers 6–8** — see P1.1. |
+| 8 | Migration path in (and out)? | ✅ | — |
+| 9 | Is the project alive? | ❌ | Changelog, releases, version support policy. |
+| 10 | How does it compare to alternatives? | ✅ | Comparisons are filed under *Guides*, where an evaluator won't look. |
 
 ### Priority 1 — evaluation and integration surface
 
@@ -215,31 +178,16 @@ can call the API.* Say it, then show the mitigations already shipped — masking
 `select-security` bulk-export limits, rate limiting, audit trail, per-tenant isolation. Vendors who
 state their limits get believed about their strengths.
 
-#### ✅ P1.3 Licensing and limits
-
-Shipped as [`pro/get-started/licensing.mdx`](pro/get-started/licensing.mdx), placed in *Get started*
-rather than a new *Evaluate* group so it is reachable before that restructure happens.
-
-#### P1.4 Rewrite `developer-tools/overview.mdx` into a real SDK page ✅
-
-Was 32 lines of cards pointing at GitHub. Now carries per-language install commands and a
-create-a-user example across five tabs — JavaScript, TypeScript, Python, PHP, Java — plus the
-browser-global build, and a section on when to skip the SDK and call the REST API directly.
-Registry coordinates were verified against npm, PyPI, Packagist and Maven Central at the time of
-writing; the Java client is **not** on Maven Central, so the page documents JitPack instead.
-
 #### P1.5 Add `x-codeSamples` to the OpenAPI spec
 
 92 endpoints, still zero code samples. Add JS/Python/PHP/Java samples to the ~12 endpoints that matter
 (`UserCreate`, `UserGet`, `UserUpdate`, `UserDelete`, `UserCreateBulk`, format-preserving token
-create/get, `AppdataCreate`, agreement accept, session create). The `servers:` half of this item is
-done — a non-localhost entry is now listed first.
+create/get, `AppdataCreate`, agreement accept, session create).
 
-#### P1.6 Ops pages — monitoring ✅, upgrades outstanding
+#### P1.6 Upgrades and version support
 
-- ✅ **Monitoring** — shipped as [`pro/administration/monitoring.mdx`](pro/administration/monitoring.mdx): Prometheus scrape config, alert rules with thresholds taken from the benchmarks, plus the two things metrics cannot report (licence usage via `SystemGetSystemStats`, database health via your cloud provider).
-- ~~HA/scaling~~ — **not needed.** Already stated in `security-overview.mdx`, `architecture.mdx`, `performance.mdx`, the FAQ, and `licensing.mdx`.
-- **Upgrades & version support** — container tag policy, whether upgrades run schema migrations, rollback, supported-version window. Vault keeps 11 versions of docs online; there is no upgrade page here at all.
+Container tag policy, whether upgrades run schema migrations, rollback, supported-version window.
+Vault keeps 11 versions of docs online; there is no upgrade page here at all.
 
 #### P1.7 `changelog.mdx`
 
@@ -248,36 +196,24 @@ a signal about the project, not about the docs.
 
 ### Priority 2 — voice, structure, and polish
 
-#### ✅ Fix the voice (this is the "appealing to a CTO" lever)
+#### Voice follow-ups
 
-The target register is `performance.mdx`: state measurements, name the bottleneck, concede weaknesses
-("Oracle writes ~2.4× slower", "~3× the on-disk size"), and mark projections as projections.
-
-Done across the site — **zero** `## Conclusion`, `## Why Choose`, or "In today's …" blocks remain, and
-zero emoji headings. Every page that ended in a sales block now ends in **Next steps**. `fuzzy-search`
-gained an honest *Performance* section saying the feature is **not** covered by the benchmarks;
-`access-control` traded nine bullets of "compliance-ready / developer-friendly" for a statement of what
-CRBAC actually does differently from RBAC.
-
-Two follow-ups, both minor: a sweep of the remaining unfalsifiable adjectives (`advanced` ×5,
-`comprehensive` ×3, `robust`/`seamless` ×2 each), and cost-or-limits statements on the concept pages
-that still make capability claims with no numbers — `tokenization.mdx` and `record-versioning.mdx`.
+The target register is `performance.mdx`: state measurements, name the bottleneck, concede weaknesses,
+and mark projections as projections. Two follow-ups remain: a sweep of the unfalsifiable adjectives
+(`advanced` ×5, `comprehensive` ×3, `robust`/`seamless` ×2 each), and cost-or-limits statements on
+`tokenization.mdx` and `record-versioning.mdx`, which still make capability claims with no numbers.
 
 #### Restructure the navigation
 
-The wholesale *Evaluate / Integrate / Deploy / Operate* regroup originally sketched here has been
-overtaken: pages have since been placed into the existing groups deliberately — production checklist
-into *Installation* (a one-time gate), backup & recovery into *Administration* (recurring work),
-licensing into *Get started* (read before buying), and migrations into their own group. Those
-decisions are recorded on the P-items above and should not be undone by a blanket restructure.
-
-What is still worth doing:
+Pages have been placed into the existing groups deliberately (production checklist in *Installation*,
+backup & recovery in *Administration*, licensing in *Get started*, migrations in their own group) —
+don't undo that with a blanket restructure. What is still worth doing:
 
 - **`Concepts` is a flat nine-item list** mixing search features (fuzzy, partial), data model
   (versioning, shared records, sub-accounts), security (select-security), and deployment
   (global-deployment). Split it by reader intent.
 - **Move the comparisons out of *Guides*.** Evaluators do not browse a guides list.
-- **Collapse the single-page `developer-tools` group** once the SDK page (P1.4) is written.
+- **Collapse the single-page `developer-tools` group.**
 - **Add a "Pro or OSS?" page.** With two Mintlify `products`, a reader who lands on Pro never learns
   OSS exists, and vice versa. OSS is the top of the funnel — give it an explicit upgrade path.
 
@@ -290,33 +226,23 @@ What is still worth doing:
 #### AI/agent surface — already ahead, finish the job
 
 `contextual.options` already exposes copy/view/ChatGPT/Claude/Perplexity/MCP/Cursor/VS Code, and
-`api/overview.mdx` links `llms-full.txt`. That's ahead of most of the 13. What's missing is what
-Stripe and Neon do: surface it on the **hub page** ("point your coding agent at our MCP server / feed
-it `llms-full.txt`") and add a short *AI-assisted integration* page. For a self-hosted vault, "your
-agent will wire the SDK correctly on the first try" is a real CTO time-saver, and it's cheap to offer
-because the plumbing already exists.
+`api/overview.mdx` links `llms-full.txt`. What's missing is what Stripe and Neon do: surface it on the
+hub ("point your coding agent at our MCP server / feed it `llms-full.txt`") and add a short
+*AI-assisted integration* page.
 
 ### Quick wins (under an hour each)
 
-1. Add `index.mdx` hub with a card grid — see P0.1.
-2. ✅ Move `performance` to position 2 under *Get started*.
-3. ✅ Strip the "In today's …" openers and the "Why choose / Bottom line / Ready to…" closers — done site-wide, not just the two pages originally named.
-4. ✅ Remove emoji from all headings — all 9 removed. Body ✅/❌ comparison markers were kept deliberately.
-5. ✅ Add a non-localhost entry to `openapi.yml` `servers:`.
-6. Add `⏱`/prerequisites callouts to the four install pages.
-7. ✅ Wrap the FAQ in `<Accordion>`.
-8. Fix the hardcoded white background on the architecture diagram.
-9. Publish a `changelog.mdx` with the last five releases.
+1. Add `⏱`/prerequisites callouts to the four install pages.
+2. Fix the hardcoded white background on the architecture diagram.
+3. Publish a `changelog.mdx` with the last five releases.
 
 ### Suggested sequence
 
 | Wave | Contents | Why this order |
 | --- | --- | --- |
-| **1** | Hub page · ✅ quickstart · remaining quick wins | Fixes first impression and the 5-minute path. Cheapest, most visible. |
-| **2** | ✅ Migrations · ✅ production checklist · ✅ backup & DR | **Done.** The three that unblock a buying decision. |
-| **3** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
-| **4** | ✅ SDK page (P1.4) · `x-codeSamples` (P1.5) · framework guides · ✅ monitoring · upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
-| **5** | `Concepts` split · ✅ voice pass · AI-integration page | Consolidation, best done once the page set is stable. |
+| **1** | Security & compliance (P1.1) · threat model (P1.2) · comparisons out of *Guides* | Survives procurement and security review. |
+| **2** | `x-codeSamples` (P1.5) · framework guides · upgrades (P1.6) · changelog (P1.7) | Makes integration and long-term ownership credible. |
+| **3** | `Concepts` split · AI-integration page · quick wins | Consolidation, best done once the page set is stable. |
 
 **Summary:** the docs are already excellent at the hard technical question (`performance.mdx` beats
 every competitor site examined) and near-silent on the five commercial ones — *how do I get in, how do
