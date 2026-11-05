@@ -80,6 +80,7 @@ documentation sites (examined July 2026) and lists the prioritised gaps.
 | **Voice pass** — every `## Conclusion` / `## Why Choose` sales block removed site-wide, marketing openers cut, emoji headings gone, and **Next steps** added to 8 dead-end pages. Nine pages now route readers to the [quickstart](pro/get-started/quickstart.mdx), up from three | Question 1 (partial) |
 | **[Monitoring](pro/administration/monitoring.mdx)** — new page: Prometheus scrape config and alert rules with thresholds from the benchmarks, plus licence usage and database health, which `/metrics` does not report | Question 4 (partial) |
 | **[Migrations](pro/migrations/overview.mdx)** — new nav group after *Comparisons*: an overview of the shared pattern, plus guides for a [SQL users table](pro/migrations/sql-users-table.mdx) and [AWS Cognito](pro/migrations/aws-cognito.mdx) | Question 8 |
+| **[Session management](pro/howtos/session-management.mdx)** — new how-to: server-side sessions with sliding and absolute expiry, logout, log out everywhere, cookie settings. Writing it surfaced Redis-mode bugs in delete, list and tenant isolation, fixed in databunkerpro #61 | Question 2 (partial) |
 
 **All five Priority 0 pages are shipped except the hub page (P0.1).** The highest-value remaining
 gaps are a changelog (P1.7) — the only thing between question 9 and a tick — the hub page, and the
