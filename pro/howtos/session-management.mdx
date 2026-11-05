@@ -4,7 +4,9 @@ sidebarTitle: Session management
 description: Keep login sessions server-side in Databunker Pro — encrypted, expiring and revocable — and hand the browser only a random ID.
 ---
 
-A session that lives in a signed cookie or a JWT cannot be taken back: logging out deletes the browser's copy, and anyone who copied it first keeps a working credential until it expires. A server-side session can be revoked, but the session store now holds who the user is, their IP, device and whatever else the app caches there — personal data in a table nobody thinks of as sensitive.
+A session is how your application remembers a logged-in user between requests: a record on the server, found by a random ID that the browser sends in a cookie. Developers routinely keep customer details in it — email, name, IP address, device — so the session store ends up holding personal data. Those same details are what a security team relies on to spot a hijacked session and investigate an incident, so they need to be both protected and available.
+
+A session that lives in a signed cookie or a JWT cannot be taken back: logging out deletes the browser's copy, and anyone who copied it first keeps a working credential until it expires. A server-side session can be revoked, but it usually sits in a table nobody thinks of as sensitive.
 
 Databunker Pro stores sessions the same way it stores user records. The browser gets a random UUID; the session data is encrypted with its own record key; expiry is enforced by the vault; and one call ends the session everywhere it was used.
 
