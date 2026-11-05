@@ -1,0 +1,188 @@
+---
+title: Secure session management
+sidebarTitle: Session management
+description: Keep login sessions server-side in Databunker Pro — encrypted, expiring and revocable — and hand the browser only a random ID.
+---
+
+A session that lives in a signed cookie or a JWT cannot be taken back: logging out deletes the browser's copy, and anyone who copied it first keeps a working credential until it expires. A server-side session can be revoked, but the session store now holds who the user is, their IP, device and whatever else the app caches there — personal data in a table nobody thinks of as sensitive.
+
+Databunker Pro stores sessions the same way it stores user records. The browser gets a random UUID; the session data is encrypted with its own record key; expiry is enforced by the vault; and one call ends the session everywhere it was used.
+
+## How it works
+
+1. At login your backend generates a UUID and calls `SessionUpsert` with the session data.
+2. The backend sets that UUID as a cookie. Nothing else reaches the browser.
+3. On every request the backend calls `SessionGet`. A `404` means the session expired or was deleted — treat the user as logged out.
+4. At logout the backend calls `SessionDelete`.
+
+Every call comes from your backend with a server-side access token. `SessionUpsert` requires an admin token, so sessions cannot be created from the browser.
+
+Sessions are kept in Redis when `REDIS_HOST` is set and in the database otherwise. The API and behaviour are the same either way.
+
+## Create a session at login
+
+Generate the session ID on the server — never accept one from the client, or an attacker can plant a known ID before the victim logs in (session fixation). It must be a UUID.
+
+To link the session to a user, put one of `token`, `login`, `email`, `phone` or `custom` inside `sessiondata`. Without it the session still works, but it is not attached to anyone and [log out everywhere](#log-out-everywhere) cannot find it.
+
+<Tabs>
+<Tab title="curl">
+
+```bash
+curl -X POST https://your-databunker/v2/SessionUpsert \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionuuid": "6f1c2a7e-4b8d-4e2f-9a31-0c5d7e8f9a10",
+    "sessiondata": {
+      "token": "USER_TOKEN",
+      "ip": "203.0.113.7",
+      "agent": "Mozilla/5.0 (Macintosh; ...)"
+    },
+    "slidingtime": "1800",
+    "finaltime": "12h"
+  }'
+```
+
+</Tab>
+<Tab title="JavaScript">
+
+```javascript
+import { randomUUID } from "node:crypto";
+
+const sessionId = randomUUID();
+await api.upsertSession(
+  sessionId,
+  { token: userToken, ip: req.ip, agent: req.get("user-agent") },
+  { slidingtime: "1800", finaltime: "12h" }
+);
+
+res.cookie("sid", sessionId, { httpOnly: true, secure: true, sameSite: "lax" });
+```
+
+</Tab>
+<Tab title="Python">
+
+```python
+import uuid
+
+session_id = str(uuid.uuid4())
+api.upsert_session(
+    session_id,
+    {"token": user_token, "ip": request.remote_addr, "agent": request.user_agent.string},
+    {"slidingtime": "1800", "finaltime": "12h"},
+)
+
+response.set_cookie("sid", session_id, httponly=True, secure=True, samesite="Lax")
+```
+
+</Tab>
+</Tabs>
+
+Calling `SessionUpsert` again with the same `sessionuuid` replaces the data and restarts both timers.
+
+## Set expiry
+
+Two timers end a session; set both.
+
+| Parameter | Ends the session | Typical value |
+| --- | --- | --- |
+| `slidingtime` | after this long **without** a `SessionGet` — each read restarts it | 15–30 minutes |
+| `finaltime` | at this point no matter how active the session is | 8–24 hours |
+
+`slidingtime` alone lets an active session — or a stolen one being replayed — live forever. `finaltime` alone logs users out mid-task. With neither, the session never expires.
+
+`finaltime` is capped by `policy.max_session_retention_period` in `databunker.yaml`. The shipped file sets `1h`, so a `finaltime` of `12h` is silently cut to one hour until you raise it:
+
+```yaml
+policy:
+  max_session_retention_period: "12h"
+```
+
+<Warning>
+Durations are a number with an optional unit: `s` seconds, `h` hours, `d` days and **`m` months — not minutes**. `"30m"` is 30 months. Write 30 minutes as `"1800"` or `"1800s"`.
+</Warning>
+
+## Check the session on every request
+
+```bash
+curl -X POST https://your-databunker/v2/SessionGet \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionuuid": "6f1c2a7e-4b8d-4e2f-9a31-0c5d7e8f9a10"}'
+```
+
+```json
+{
+  "status": "ok",
+  "sessionuuid": "6f1c2a7e-4b8d-4e2f-9a31-0c5d7e8f9a10",
+  "finaltime": 1793900656,
+  "sessiondata": { "token": "USER_TOKEN", "ip": "203.0.113.7", "agent": "Mozilla/5.0 (Macintosh; ...)" }
+}
+```
+
+`finaltime` in the response is when the session will expire if it is not used again. A `404` means it has expired or been deleted: clear the cookie and send the user to log in.
+
+Comparing the stored `ip` or `agent` with the current request is a cheap way to spot a replayed cookie. Decide what a mismatch means for your users before enforcing it — mobile networks change IPs often.
+
+## Log out
+
+```bash
+curl -X POST https://your-databunker/v2/SessionDelete \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionuuid": "6f1c2a7e-4b8d-4e2f-9a31-0c5d7e8f9a10"}'
+```
+
+The next `SessionGet` for that ID returns `404`, so a copy of the cookie is now worthless. Clear the cookie as well.
+
+## Rotate the ID when privileges change
+
+When a user logs in from an anonymous session, completes MFA, or switches into an admin role, create a session under a new UUID and delete the old one. An ID that was seen before the change cannot be used after it.
+
+## Log out everywhere
+
+For "sign out of all devices", or after a password reset, list the user's sessions and delete each one:
+
+```bash
+curl -X POST https://your-databunker/v2/SessionListUserSessions \
+  -H "X-Bunker-Token: YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "token", "identity": "USER_TOKEN"}'
+```
+
+```json
+{
+  "status": "ok",
+  "total": 2,
+  "rows": [
+    { "sessionuuid": "6f1c2a7e-...", "lastusedtime": 1793898856, "data": { "ip": "203.0.113.7", "...": "..." } },
+    { "sessionuuid": "a90e44d1-...", "lastusedtime": 1793812400, "data": { "ip": "198.51.100.23", "...": "..." } }
+  ]
+}
+```
+
+In the list, session data is under `data`, not `sessiondata`. The same response can back an "active sessions" page that shows each device and when it was last used.
+
+Only sessions linked to the user — through `token`, `login`, `email`, `phone` or `custom` in `sessiondata` — appear here.
+
+## Cookie settings
+
+The cookie carries only the session UUID, but it is still a bearer credential:
+
+- `HttpOnly` — scripts on the page, including injected ones, cannot read it.
+- `Secure` — sent over HTTPS only.
+- `SameSite=Lax` (or `Strict`) — not sent on cross-site POSTs.
+- No `Max-Age` longer than `finaltime`. Expiry is enforced by the vault regardless, but a stale cookie just produces failed lookups.
+
+## What to keep in a session
+
+Keep session data small: the user token, what you need to detect replay, and flags such as an MFA step completed. Load the profile with `UserGet` when you need it rather than copying it into the session, where it goes stale. Never store a password or a password hash in a session.
+
+Deleting a user also deletes every session linked to them, so an erased user is logged out on the next request.
+
+## Next steps
+
+- [Access control](/pro/administration/access-control) — limit what the token your backend uses for session calls can do.
+- [Multi-tenancy](/pro/administration/multi-tenancy) — sessions are scoped to the tenant of the access token.
+- [Architecture](/pro/get-started/architecture) — where Redis fits in a deployment.

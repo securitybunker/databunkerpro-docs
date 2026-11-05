@@ -89,7 +89,8 @@
                   "pro/howtos/update-license",
                   "pro/howtos/clean-users-table",
                   "pro/howtos/store-user-fields",
-                  "pro/howtos/tokenize-llm-prompts"
+                  "pro/howtos/tokenize-llm-prompts",
+                  "pro/howtos/session-management"
                 ]
               },
               {
