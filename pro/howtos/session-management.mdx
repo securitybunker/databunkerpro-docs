@@ -8,7 +8,7 @@ A session is how your application remembers a logged-in user between requests: a
 
 A session that lives in a signed cookie or a JWT cannot be taken back: logging out deletes the browser's copy, and anyone who copied it first keeps a working credential until it expires. A server-side session can be revoked, but it usually sits in a table nobody thinks of as sensitive.
 
-Databunker Pro stores sessions the same way it stores user records. The browser gets a random UUID; the session data is encrypted with its own record key; expiry is enforced by the vault; and one call ends the session everywhere it was used.
+Databunker Pro provides an API that developers use to store sessions in the vault, encrypted like user records. The browser gets a random UUID; the session data is encrypted with its own record key; expiry is enforced by the vault; and one call ends the session everywhere it was used.
 
 ## How it works
 
