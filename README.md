@@ -126,6 +126,47 @@ tick — and the threat model (P1.2).
 | 9 | Is the project alive? | ❌ | Changelog, releases, version support policy. |
 | 10 | How does it compare to alternatives? | ✅ | Comparisons are filed under *Guides*, where an evaluator won't look. |
 
+### Missing topics (November 2026 survey)
+
+A second pass over 16 sites — PII vaults (Skyflow, Basis Theory, VGS, Evervault, TokenEx), payment
+gateways (Stripe, Adyen, Braintree, Checkout.com) and SaaS/infra (Auth0, Clerk, WorkOS, Supabase,
+Twilio, HashiCorp Vault, Infisical) — compared against the docs and the `/v2` API.
+
+**Shipped but undocumented** — the cheapest wins; the facts are already in the code:
+
+| Topic | What exists | Who documents it |
+| --- | --- | --- |
+| Consent management | Agreement, legal basis and processing activity APIs (16 endpoints) | Auth0 only — open ground |
+| Data subject requests | `UserDeleteRequest`, `AppdataUpdateRequest`, `BulkListAllUserRequests`, approval flow | Auth0, Stripe, Adyen |
+| Audit log | `AuditListUserEvents`, `BulkListAllAuditEvents`; export to a SIEM | Infisical, WorkOS, Auth0 (name Splunk/Datadog/Sentinel) |
+| Webhooks | `notification_url`: `profilenew`, `profilechange`, `forgetme`, `consentchange`, `badlogin` — confirm it is a supported feature | most of the 16 |
+| Configuration reference | Every env var and `databunker.yaml` key: DB, Redis, object storage, SMTP, TLS | Vault, Infisical, Clerk |
+| Groups, app data, policy language | APIs exist; CRBAC grammar is in `databunkerpro/POLICY.md`, unpublished | Skyflow (policy language reference) |
+
+**Trust and ownership** — changelog (P1.7), upgrades and version support (P1.6), threat model (P1.2),
+security and compliance (P1.1), and data residency (`global-deployment` exists but is not framed as
+residency; Skyflow, Basis Theory, VGS, Auth0 and Twilio all have a page).
+
+**Integration:**
+
+- **Moving data in and out.** All four gateways document an encrypted import format, an old-ID → token
+  mapping file, what cannot move, and export to another provider; Evervault has "Migrating Off
+  Evervault". We cover SQL and Cognito in, but have no file-format spec and no exit guide.
+- **Rate limits and idempotency** — Stripe, Checkout.com, Auth0, WorkOS, Twilio.
+- **Complete error-code reference** — check `errors.mdx` lists every code (Twilio, Adyen, Basis Theory).
+- **Testing / sandbox / test data** — Basis Theory, VGS, Evervault, all gateways; demo mode can anchor it.
+- **Framework guides** (Next.js, Express, Django, Laravel, Spring) — Clerk, Supabase, WorkOS.
+- **Showing masked or detokenized data in a UI** — Basis Theory, VGS, Evervault.
+- **Observability integrations** (Datadog, Grafana) beyond the Prometheus page.
+
+**AI and agents** — standard across the 16 in 2026:
+
+- Surface the AI files on the developer hub. Mintlify serves [`llms.txt`](https://docs.databunker.org/llms.txt), [`llms-full.txt`](https://docs.databunker.org/llms-full.txt), a `.md` copy of every page and an MCP server at `https://docs.databunker.org/mcp`, all listed in [API overview](pro/api/overview.mdx#api-documents-for-ai-assistants).
+- Grow [tokenize LLM prompts](pro/howtos/tokenize-llm-prompts.mdx) into a section — Skyflow and Basis Theory have whole ones.
+- Admin SSO / SCIM — only if the product supports it (VGS, Evervault, WorkOS, Vault).
+
+**Small:** glossary (Vault, WorkOS, Twilio) and a support / SLA page.
+
 ### Priority 1 — evaluation and integration surface
 
 #### P1.1 Promote the buried gold: `pro/get-started/security-compliance.mdx`
