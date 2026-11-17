@@ -156,8 +156,8 @@ This run covers the **Oracle SE2 user-record vault path** only. Format-preservin
 
 Start from the open-source Python load scripts in the [`databunkerpro-python`](https://github.com/securitybunker/databunkerpro-python) SDK repo:
 
-- **[`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_creator.py)** — drives `UserCreateBulk`.
-- **[`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/bulk_user_fetcher.py)** — drives `UserGet` for read latency.
+- **[`bulk_user_creator.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/stress-test/bulk_user_creator.py)** — drives `UserCreateBulk`.
+- **[`bulk_user_fetcher.py`](https://github.com/securitybunker/databunkerpro-python/blob/main/stress-test/bulk_user_fetcher.py)** — drives `UserGet` for read latency.
 
 <Steps>
   <Step title="Provision">Dedicated managed PostgreSQL (RDS / Aurora / Cloud SQL) plus a separate application host in the same VPC.</Step>
