@@ -1,0 +1,81 @@
+---
+title: "Frequently asked questions"
+sidebarTitle: "FAQ"
+description: "Common questions about Databunker OSS: what it stores, how lookup and backup work, and how it encrypts data."
+---
+
+<AccordionGroup>
+
+<Accordion title="Is Databunker a CRUD store for user records?">
+Secure create, read, update and delete for user records is one part of Databunker. When you save a record, Databunker extracts the email, phone, login name and custom index, and builds a hash-based index on them for fast lookup.
+
+It also provides:
+
+- a secure session storage API
+- temporary shareable identities
+- automatic record expiration and removal
+- consent management and an audit trail for each record
+- a web UI where users can see and manage their own data
+</Accordion>
+
+<Accordion title="How do I find all orders from a user named John?">
+Databunker looks up users by login name, email address, phone number, custom index or token. It does not search by name. Look the user up by one of those values, then use the returned token to query the orders table in your own database.
+</Accordion>
+
+<Accordion title="How do I back up the Databunker database?">
+With MySQL or PostgreSQL as the backend, use the database's standard tools, such as `mysqldump` or `pg_dump`.
+
+With SQLite, call the backup API, which returns the database as SQL:
+
+```bash
+curl -s http://localhost:3000/v1/sys/backup \
+  -H "X-Bunker-Token: $TOKEN" -o backup.sql
+```
+
+Either way, the backup is encrypted with the master key. Store the master key separately: without it, the backup cannot be restored.
+</Accordion>
+
+<Accordion title="How is Databunker different from other tokenization tools?">
+Most tokenization tools replace single values, such as a name or an email, with no link to the rest of the customer profile. Databunker tokenizes the whole customer record. That makes audit, data minimization, pseudonymization and data segregation easier, and it lets users sign in to a portal to view, update or delete their own data.
+
+For format-preserving tokenization of individual values, such as card numbers, see [Databunker Pro tokenization](/pro/concepts/tokenization).
+</Accordion>
+
+<Accordion title="What counts as PII, and what should I store in Databunker?">
+A partial list:
+
+| | |
+| --- | --- |
+| Name | RFID |
+| Address | Contact details |
+| IP address | Genetic data |
+| Cookie data | Passport data |
+| Banking details | Driving licence |
+| Financial data | Mobile device ID |
+| Browsing history | Personal ID number |
+| Political opinions | Ethnic origin |
+| Sexual orientation | Health and medical data |
+| Social Security Number | |
+</Accordion>
+
+<Accordion title="What is Databunker built with?">
+Databunker is written in **Go**. It uses an embedded **SQLite** database or an external **MySQL** or **PostgreSQL** database, and ships with its web UI in a single executable.
+</Accordion>
+
+<Accordion title="Does Databunker encrypt data in transit and at rest?">
+Yes. Databunker encrypts or hashes all personal data before writing it to the database. Each record is encrypted with AES-256 using a 32-byte key: a 24-byte master key held only in memory, plus an 8-byte key per record, stored with that record.
+
+For encryption in transit, configure TLS certificates. See [Security review](/oss/get-started/security#encryption-in-transit).
+</Accordion>
+
+<Accordion title="Is Databunker a wrapper around an existing database?">
+No. Databunker is a standalone service that encrypts and stores personal records. It exposes a REST API for storing and updating user records as JSON, plus a web UI where customers can see their personal data. It uses its own backend database, not yours.
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+- [Quickstart](/oss/get-started/quickstart)
+- [Security review](/oss/get-started/security)
+- [Benchmark results](/oss/get-started/benchmark)
