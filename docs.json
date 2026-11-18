@@ -133,7 +133,11 @@
                   "oss/get-started/overview",
                   "oss/get-started/quickstart",
                   "oss/get-started/architecture",
-                  "oss/get-started/examples"
+                  "oss/get-started/security",
+                  "oss/get-started/benchmark",
+                  "oss/get-started/migration",
+                  "oss/get-started/examples",
+                  "oss/get-started/faq"
                 ]
               },
               {

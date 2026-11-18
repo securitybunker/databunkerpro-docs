@@ -1,0 +1,82 @@
+---
+title: "Security review"
+sidebarTitle: "Security"
+description: "How Databunker OSS protects the confidentiality, integrity and availability of personal records."
+---
+
+This page reviews Databunker OSS against the three goals of information security: **confidentiality**, **integrity** and **availability**. For key wrapping, Shamir key shares and tenant isolation, see the [Databunker Pro security overview](/pro/get-started/security-overview).
+
+Databunker is built for privacy by design. Every API request produces an audit event, and records live outside your main database, which supports data minimization and pseudonymization.
+
+## Confidentiality
+
+### Record encryption
+
+Every user record is encrypted with **AES-256-GCM** before it is written to the backend database (SQLite, MySQL or PostgreSQL). The 32-byte key is made of two parts:
+
+- a **24-byte master key**, supplied at startup through `DATABUNKER_MASTERKEY`, `DATABUNKER_MASTERKEY_FILE` or `--masterkey`, and held only in memory
+- an **8-byte record key**, generated randomly for each record and stored next to it
+
+A copy of the database without the master key yields only ciphertext. Keep the master key out of the database host and its backups.
+
+### Hashed search index
+
+Before encrypting a record, Databunker extracts the email address, phone number, login name and custom index, normalizes them, and stores a salted **SHA-256** hash of each. Lookups by these values hash the query and match on the hash, so the index never holds plaintext.
+
+### Encrypted audit trail
+
+Audit events store the user token and the acting identity encrypted, and the record's before and after states as ciphertext.
+
+### Encryption in transit
+
+Databunker serves HTTPS when the certificate files configured under `ssl` in `databunker.yaml` exist, and falls back to plain HTTP when they do not:
+
+```yaml databunker.yaml
+ssl:
+  ssl_certificate: "/databunker/certs/server.cer"
+  ssl_certificate_key: "/databunker/certs/server.key"
+```
+
+<Warning>
+HTTP is fine for local testing. In production, provide certificates or terminate TLS in front of Databunker and keep port 3000 off the public network.
+</Warning>
+
+### No bulk export by default
+
+The API call that lists all user records is disabled unless you set `list_users: true` in `databunker.yaml`. An attacker who steals an access token still has to look up records one at a time, by a value they already know.
+
+### Secure session storage
+
+Application sessions often hold personal data: an email, an IP address, browser details. The `/v1/session` API stores session objects in the same encrypted store, each with its own record key.
+
+### User schema validation
+
+Set `user_record_schema` to a JSON schema, and Databunker rejects create and update requests whose user record does not match it.
+
+## Integrity
+
+### Conflict-safe record updates
+
+Two Databunker processes can update the same user record at the same time. To stop one silently overwriting the other, each record stores a checksum of its ciphertext, and the SQL `UPDATE` only applies when that checksum still matches the version the process read.
+
+The checksum is **MD5**. It detects concurrent changes, not tampering, and is never used to protect data. Encryption and index hashing use AES-256-GCM and SHA-256.
+
+### Token-based API access
+
+Every API request carries an `X-Bunker-Token` header. Databunker resolves the token to a role, checks its permissions, and rejects anything the role is not allowed to do.
+
+## Availability
+
+### Containers
+
+Databunker ships as a Docker container, with example [Docker Compose files](https://github.com/securitybunker/databunker) for MySQL and PostgreSQL and a [Helm chart](https://github.com/securitybunker/databunker/tree/master/charts) for Kubernetes.
+
+### Stateless servers
+
+Databunker keeps no state of its own, so you can run as many instances as you need behind a load balancer. The backend database is the bottleneck, so scale it to match. See the [benchmark results](/oss/get-started/benchmark) for measured throughput.
+
+## Next steps
+
+- [Benchmark results](/oss/get-started/benchmark)
+- [Migrating an existing project](/oss/get-started/migration)
+- [Source code](https://github.com/securitybunker/databunker)
