@@ -54,7 +54,7 @@ info:
     | Code | Meaning |
     |------|---------|
     | 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure |
-    | 403  | Access denied — missing/invalid API token, insufficient permissions, or a disabled feature. Also returned as `Record limit reached` when the license record cap is hit (reads, updates and deletes still work) and as `License expired` when the license has lapsed (the vault is read-only) |
+    | 403  | Access denied — missing API token, insufficient permissions, `Access denied by policy`, or a disabled feature. Also returned as `Record limit reached` when the license record cap is hit (reads, updates and deletes still work) and as `License expired` when the license has lapsed (the vault is read-only) |
     | 404  | The referenced record was not found |
     | 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state |
     | 500  | Internal server error |
@@ -1659,23 +1659,19 @@ paths:
                   status:
                     type: string
                     example: "ok"
+                  total:
+                    type: integer
+                    description: Total number of events
                   rows:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        auditeventuuid:
-                          type: string
-                          description: UUID of the audit event
-                        eventtype:
-                          type: string
-                          description: Type of the audit event
-                        timestamp:
-                          type: string
-                          description: Timestamp of the event
-                        more:
-                          type: boolean
-                          description: Whether there are more details available for this event
+                      allOf:
+                        - $ref: '#/components/schemas/AuditEvent'
+                        - type: object
+                          properties:
+                            more:
+                              type: boolean
+                              description: Whether AuditGetEvent has before, after or debug for this event
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4290,20 +4286,19 @@ paths:
                   status:
                     type: string
                     example: "ok"
+                  total:
+                    type: integer
+                    description: Total number of events
                   rows:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        auditeventuuid:
-                          type: string
-                          description: UUID of the audit event
-                        eventtype:
-                          type: string
-                          description: Type of the audit event
-                        timestamp:
-                          type: string
-                          description: Timestamp of the event
+                      allOf:
+                        - $ref: '#/components/schemas/AuditEvent'
+                        - type: object
+                          properties:
+                            more:
+                              type: boolean
+                              description: Whether AuditGetEvent has before, after or debug for this event
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4344,17 +4339,20 @@ paths:
                     type: string
                     example: "ok"
                   event:
-                    type: object
-                    description: Audit event record
-                  eventtype:
-                    type: string
-                    description: Type of the audit event
-                  timestamp:
-                    type: string
-                    description: Timestamp of the event
-                  details:
-                    type: object
-                    description: Detailed information about the event
+                    allOf:
+                      - $ref: '#/components/schemas/AuditEvent'
+                      - type: object
+                        properties:
+                          before:
+                            type: object
+                            description: Record before the change
+                          after:
+                            type: object
+                            description: Record after the change
+                          debug:
+                            type: string
+                            description: Error details
+                            example: "no role policy allows UserGet"
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -5450,14 +5448,14 @@ components:
             status: error
             message: "Missing API request parameters: profile"
     AccessDenied:
-      description: Access denied — missing or invalid API token, insufficient permissions, disabled feature, or license limit
+      description: Access denied — missing API token, insufficient permissions, denied by policy, disabled feature, or license limit
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
           example:
             status: error
-            message: "Access denied"
+            message: "Access denied by policy"
     NotFound:
       description: The referenced record was not found
       content:
@@ -5532,20 +5530,56 @@ components:
 
     AuditEvent:
       type: object
+      description: Empty fields may be left out
       properties:
         auditeventuuid:
           type: string
           description: UUID of the audit event
-        eventtype:
+        creationtime:
+          type: integer
+          description: Unix time of the event, in seconds
+          example: 1795524722
+        title:
           type: string
-          description: Type of the audit event
-        timestamp:
+          description: API name
+          example: "UserGet"
+        status:
           type: string
-          format: date-time
-          description: Timestamp of the event
-        details:
+          enum: [ok, error]
+        msg:
+          type: string
+          description: Result or error message
+          example: "Access denied by policy"
+        xtokenidentity:
+          type: string
+          description: Who called - tenant admin, role, or user token
+          example: "1-role-5"
+        policyid:
+          type: integer
+          description: Policy that allowed the call, 0 if none
+        mode:
+          type: string
+          description: How the user was identified in the request
+        identity:
+          type: string
+          description: User identifier sent in the request
+        usertoken:
+          type: string
+          description: Token of the user whose data was accessed, not the caller
+        record:
+          type: string
+          description: Object of the call - a user token, or a file, app, agreement or group
+        params:
+          type: string
+          description: Request settings as a JSON string, such as the group, file tag or token type
+          example: "{\"groupid\":1,\"groupname\":\"team1\"}"
+        requestmetadata:
           type: object
-          description: Detailed information about the event
+          description: The request_metadata sent with the request. Left out when users read their own events
+          example: { "agent_id": "A", "purpose": "fraud-investigation" }
+        tenantid:
+          type: integer
+          description: Tenant of the call
 
 tags:
   - name: User Tokenization
