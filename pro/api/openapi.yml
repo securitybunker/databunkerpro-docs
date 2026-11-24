@@ -54,7 +54,7 @@ info:
     | Code | Meaning |
     |------|---------|
     | 400  | Bad request — malformed body, missing or invalid parameters, schema validation failure |
-    | 403  | Access denied — missing API token, insufficient permissions, `Access denied by policy`, or a disabled feature. Also returned as `Record limit reached` when the license record cap is hit (reads, updates and deletes still work) and as `License expired` when the license has lapsed (the vault is read-only) |
+    | 403  | Access denied — missing or invalid API token, insufficient permissions, `Access denied by policy`, or a disabled feature. Also returned as `Record limit reached` when the license record cap is hit (reads, updates and deletes still work) and as `License expired` when the license has lapsed (the vault is read-only) |
     | 404  | The referenced record was not found |
     | 409  | Conflict — duplicate record, name already in use, or operation conflicts with the record's current state |
     | 500  | Internal server error |
@@ -5448,7 +5448,7 @@ components:
             status: error
             message: "Missing API request parameters: profile"
     AccessDenied:
-      description: Access denied — missing API token, insufficient permissions, denied by policy, disabled feature, or license limit
+      description: Access denied — missing or invalid API token, insufficient permissions, denied by policy, disabled feature, or license limit
       content:
         application/json:
           schema:
