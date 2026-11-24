@@ -4368,7 +4368,7 @@ paths:
   /v2/TenantCreate:
     post:
       summary: Create a new tenant
-      description: Creates a new tenant for multi-tenant setups
+      description: Creates a new tenant for multi-tenant setups. Main tenant only.
       tags: [Tenant Management]
       requestBody:
         required: true
@@ -4419,7 +4419,7 @@ paths:
   /v2/TenantGet:
     post:
       summary: Get tenant information
-      description: Retrieves information about a specific tenant
+      description: Retrieves information about a tenant. Other tenants can read only themselves, the main tenant can read all.
       tags: [Tenant Management]
       requestBody:
         required: true
@@ -4523,7 +4523,7 @@ paths:
   /v2/TenantDelete:
     post:
       summary: Delete a tenant
-      description: Deletes a tenant and its records. The system tenant (id `1`) cannot be deleted.
+      description: Deletes a tenant and its records. The system tenant (id `1`) cannot be deleted. Main tenant only.
       tags: [Tenant Management]
       requestBody:
         required: true
@@ -4564,7 +4564,7 @@ paths:
   /v2/TenantListTenants:
     post:
       summary: List all tenants
-      description: Retrieves a list of all tenants in the system
+      description: Retrieves a list of all tenants in the system. Main tenant only.
       tags: [Tenant Management]
       requestBody:
         content:
@@ -5056,7 +5056,7 @@ paths:
   /v2/SystemGetUserReport:
     post:
       summary: Get user report
-      description: Generates a detailed report for a specific user
+      description: Lists the tenants that hold a record with the user's email. Main tenant only.
       tags: [System Operations]
       requestBody:
         required: true
