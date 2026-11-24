@@ -25,10 +25,6 @@ Successful responses always include `"status": "ok"`. As a defensive pattern, ch
 Databunker Pro releases prior to the 2026-07 update returned HTTP `405` for most error conditions. If you run an older release, treat any non-2xx response as an error and rely on the JSON `status`/`message` fields.
 </Note>
 
-<Note>
-Releases before 0.14.33 returned HTTP `500` with `Failed to check the role policy` (or `user`, `group`, `basic user`) when a policy denied the call. If your client checks for these, switch to `403` and `Access denied by policy`.
-</Note>
-
 ## Common error messages
 
 The `message` field is human-readable. Representative messages per status code:
