@@ -120,6 +120,7 @@ The unlock UUID lives for **60 seconds** and may be reused within that window. I
 
 - **Public endpoints** — no token required: `UserPrelogin`, `UserLogin`, `CaptchaCreate`, `SharedRecordGet`, `TenantGetUIConf`. `UserPrelogin`, `UserLogin` and `SharedRecordGet` are written to the audit trail; the others are not.
 - **Authenticated endpoints** — everything else requires `X-Bunker-Token` and passes policy evaluation: root tokens bypass policy checks, role xtokens are evaluated against their linked policies, and login xtokens are restricted to the user's own record.
-- **Main-tenant-only endpoints** — denied to sub-tenant admins even with a valid tenant token: `RoleCreate`, `RoleUpdate`, `PolicyCreate`, `PolicyUpdate`, `TenantListTenants`, `SystemGenerateWrappingKey`, and all cross-tenant `System*` operations.
+- **Main-tenant-only endpoints** — denied to every token of another tenant, with HTTP `403` and `Only the main tenant can use this API`: `TenantCreate`, `TenantDelete`, `TenantListTenants`, and all `System*` operations.
+- **Tenant admins** — a tenant's root token manages that tenant, including its roles and policies (`RoleCreate`, `PolicyCreate`, `PolicyUpdate`, `RoleLinkPolicy`). `TenantGet` and `TenantUpdate` reach only the tenant itself, unless called by the main tenant.
 
 Without a token, a call returns HTTP `403` with `API access denied`. A malformed, unknown, or expired token returns HTTP `500` with `Failed to check the access xtoken`. A valid token whose policies do not allow the call returns HTTP `403` with `Access denied by policy`. See [Errors](/pro/api/errors).

@@ -51,7 +51,8 @@ The `message` field is human-readable. Representative messages per status code:
 | `License expired` | The installation license has expired and the vault is [read-only](/pro/get-started/licensing#when-the-license-expires) — reads, exports and deletions still work |
 | `BulkListUsers is disabled` | The `list_users` configuration flag is off |
 | `The unlockuuid value was not found or is not valid` | The [bulk-unlock UUID](/pro/api/authentication#bulk-unlock-uuid) is missing, wrong, or past its 60-second lifetime |
-| `Only the main tenant admin can ...` | A main-tenant-only endpoint was called with a sub-tenant token |
+| `Only the main tenant can use this API` | A [main-tenant-only endpoint](/pro/api/authentication#endpoint-permission-levels) was called by another tenant |
+| `Can not view another tenant account` | `TenantGet` was called for another tenant |
 
 ### 404 — Not found
 

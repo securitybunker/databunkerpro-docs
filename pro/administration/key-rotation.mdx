@@ -95,7 +95,7 @@ Your five Shamir shares remain valid after rotation and do **not** need to be re
 
 | Response | Meaning |
 | -------- | ------- |
-| `403 Only the main tenant admin can generate wrapping keys` | The token belongs to a sub-tenant. Use the main-tenant root token. |
+| `403 Only the main tenant can use this API` | The token belongs to a sub-tenant. Use the main-tenant root token. |
 | `500 Failed to hex decode key1` | A share was not valid hex. Send the shares exactly as issued. |
 | `403 Master key mismatch` | The shares reconstructed a valid key, but for a different vault. Check you are using this instance's shares. |
 
