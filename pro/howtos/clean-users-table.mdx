@@ -25,7 +25,7 @@ A user in Databunker Pro is identified by a UUID **token**. Beyond the main `use
 | `sharedrecords` | `token` | Shared-record grants |
 | `requests` | `token` | Data-subject requests |
 | `agreements` | `token` | Consent / legal-basis agreements |
-| `audit` | `record` | Audit events for the user |
+| `audit` | `usertoken` (encrypted) | Audit events for the user |
 | `files` | `token` | Encrypted file metadata and wrapped per-file keys |
 | `filetags` | `token` | File tags |
 | `xtokens` | `usertoken` | Per-user access tokens (only rows where `usertoken` is set — see below) |

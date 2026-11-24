@@ -121,6 +121,33 @@ The [benchmarks](/pro/get-started/performance#the-key-insight-the-bottleneck-mov
 
 The [audit trail](/pro/get-started/security-overview) is a compliance control, not a debug log. Its failure mode is silence, so treat a gap in audit records as an incident rather than a monitoring nuisance — a period of activity with no corresponding audit entries is the signal to look for.
 
+### Audit event fields
+
+`AuditListUserEvents`, `AuditGetEvent` and `BulkListAllAuditEvents` return these fields. Empty fields may be left out.
+
+| Field | Meaning | Encrypted at rest |
+| --- | --- | --- |
+| `auditeventuuid` | Event UUID | no |
+| `creationtime` | Unix time, in seconds | no |
+| `title` | API name, such as `UserGet` | no |
+| `status` | `ok` or `error` | no |
+| `msg` | Result or error message | no |
+| `xtokenidentity` | Who called: `1-tenant-admin`, `1-role-5` (tenant and role ID), or the first part of the user token for a user's own token | no |
+| `policyid` | Policy that allowed the call, `0` if none | no |
+| `mode`, `identity` | How the user was identified in the request | `identity` only |
+| `usertoken` | The user whose data was accessed, not the caller (since 0.14.32) | yes |
+| `record` | The object of the call: a user token, or a file, app, agreement or group | yes |
+| `params` | Request settings as a JSON string, such as the group, file tag or token type (since 0.14.32) | no |
+| `requestmetadata` | The [`request_metadata`](/pro/administration/access-control) sent with the request, as an object (since 0.14.33) | yes |
+| `before`, `after` | Record before and after a change. Filled by `AuditGetEvent` only | yes |
+| `debug` | Error details. Filled by `AuditGetEvent` only | no |
+| `more` | List calls only: `true` when `AuditGetEvent` has `before`, `after` or `debug` | – |
+| `tenantid` | Tenant of the call | no |
+
+`params` is set by calls that need it to be understood later: creating a user in a group, listing group users or files by tag, and tenant, token, shared record and legal basis calls.
+
+Events written before 0.14.32 have no `usertoken`, so `AuditListUserEvents` does not return them.
+
 ## Next steps
 
 - [Production checklist](/pro/installation/production-checklist) — the go-live gate that includes these alerts
