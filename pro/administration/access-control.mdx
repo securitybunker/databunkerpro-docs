@@ -137,7 +137,7 @@ A request from the same role without those metadata values — or with different
 | `app_name`          | Calling application — useful when multiple apps share a role.        |
 | `agent_id`          | The person making the request — identifies individuals who share a role token. |
 
-Since 0.14.33, `request_metadata` is recorded in the audit event for the request, so it doubles as accountability metadata even when no policy references it. Audit calls return it as `requestmetadata`. Calls that a policy denied keep it too.
+`request_metadata` is recorded in the audit event for the request, so it doubles as accountability metadata even when no policy references it. Audit calls return it as `requestmetadata`. Calls that a policy denied keep it too.
 
 - It is stored encrypted.
 - It is limited to 4 KB of JSON. A larger value is rejected with HTTP `400`.
